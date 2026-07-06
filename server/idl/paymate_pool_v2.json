@@ -1,0 +1,1965 @@
+{
+  "address": "69f976Kiw8xagHcoLKWZVUp71ZPHtEbBYrSxnFJH7JQQ",
+  "metadata": {
+    "name": "paymate_pool_v2",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Single-PSP credit facility for testnet"
+  },
+  "instructions": [
+    {
+      "name": "cancel_funding",
+      "docs": [
+        "Admin aborts a funding round that won't reach soft cap. Sets the",
+        "is_cancelled flag, blocking further deposits and `execute_facility`.",
+        "Lenders pull their USDC back via the existing `withdraw_funding`",
+        "(which already requires `!is_active`, true for a cancelled pool).",
+        "One-way: a cancelled pool cannot be revived; admin must initialize",
+        "a new facility_id."
+      ],
+      "discriminator": [
+        252,
+        83,
+        32,
+        117,
+        64,
+        229,
+        228,
+        53
+      ],
+      "accounts": [
+        {
+          "name": "pool",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool.psp_wallet",
+                "account": "Pool"
+              },
+              {
+                "kind": "account",
+                "path": "pool.facility_id",
+                "account": "Pool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "admin",
+          "signer": true,
+          "relations": [
+            "pool"
+          ]
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "claim_protocol_fees",
+      "docs": [
+        "Admin claims protocol's accrued share of fees."
+      ],
+      "discriminator": [
+        34,
+        142,
+        219,
+        112,
+        109,
+        54,
+        133,
+        23
+      ],
+      "accounts": [
+        {
+          "name": "pool",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool.psp_wallet",
+                "account": "Pool"
+              },
+              {
+                "kind": "account",
+                "path": "pool.facility_id",
+                "account": "Pool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "admin_usdc",
+          "writable": true
+        },
+        {
+          "name": "admin",
+          "signer": true,
+          "relations": [
+            "pool"
+          ]
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "declare_default",
+      "docs": [
+        "Admin marks facility as defaulted. Callable only after",
+        "`tenor_end + DEFAULT_BUFFER_DAYS`. Allows lenders to redeem against",
+        "whatever's in the vault (pro-rata haircut)."
+      ],
+      "discriminator": [
+        111,
+        69,
+        178,
+        74,
+        121,
+        205,
+        118,
+        251
+      ],
+      "accounts": [
+        {
+          "name": "pool",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool.psp_wallet",
+                "account": "Pool"
+              },
+              {
+                "kind": "account",
+                "path": "pool.facility_id",
+                "account": "Pool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "admin",
+          "signer": true,
+          "relations": [
+            "pool"
+          ]
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "deposit",
+      "docs": [
+        "Lender deposits USDC during Funding state. Mints LP tokens 1:1."
+      ],
+      "discriminator": [
+        242,
+        35,
+        198,
+        137,
+        82,
+        225,
+        242,
+        182
+      ],
+      "accounts": [
+        {
+          "name": "pool",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool.psp_wallet",
+                "account": "Pool"
+              },
+              {
+                "kind": "account",
+                "path": "pool.facility_id",
+                "account": "Pool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "lp_mint",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  112,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "lender_usdc",
+          "writable": true
+        },
+        {
+          "name": "lender_lp",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "lender"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "lp_mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "lender",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "execute_facility",
+      "docs": [
+        "Admin flips Funding → Active once soft cap is met. Locks deposits",
+        "and lender exits; PSP can begin drawing."
+      ],
+      "discriminator": [
+        110,
+        196,
+        94,
+        156,
+        1,
+        194,
+        139,
+        47
+      ],
+      "accounts": [
+        {
+          "name": "pool",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool.psp_wallet",
+                "account": "Pool"
+              },
+              {
+                "kind": "account",
+                "path": "pool.facility_id",
+                "account": "Pool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "admin",
+          "signer": true,
+          "relations": [
+            "pool"
+          ]
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize_pool",
+      "docs": [
+        "Admin one-shot. Creates pool, vault, and LP mint for one PSP."
+      ],
+      "discriminator": [
+        95,
+        180,
+        10,
+        172,
+        84,
+        174,
+        232,
+        40
+      ],
+      "accounts": [
+        {
+          "name": "pool",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "args.psp_wallet"
+              },
+              {
+                "kind": "arg",
+                "path": "args.facility_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "lp_mint",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  112,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "usdc_mint"
+        },
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "InitializePoolArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "redeem_lp",
+      "docs": [
+        "Lender redeems LP tokens for pro-rata share of vault. Valid only when",
+        "the facility is fully closed (tenor expired AND no active drawdowns",
+        "AND no unpaid commit fee), or when admin has declared default."
+      ],
+      "discriminator": [
+        12,
+        99,
+        190,
+        72,
+        228,
+        108,
+        109,
+        164
+      ],
+      "accounts": [
+        {
+          "name": "pool",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool.psp_wallet",
+                "account": "Pool"
+              },
+              {
+                "kind": "account",
+                "path": "pool.facility_id",
+                "account": "Pool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "lp_mint",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  112,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "lender_usdc",
+          "writable": true
+        },
+        {
+          "name": "lender_lp",
+          "writable": true
+        },
+        {
+          "name": "lender",
+          "signer": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "lp_amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "repay",
+      "docs": [
+        "PSP repays one drawdown. Computes utilization + penalty for that loan",
+        "and clears all currently-accrued commit fee in the same transfer.",
+        "Settles a single drawdown's principal + util + penalty.",
+        "Pool-wide commit fee is NOT bundled here — PSP must call",
+        "`settle_commit_fee` separately (typically at facility close)."
+      ],
+      "discriminator": [
+        234,
+        103,
+        67,
+        82,
+        208,
+        234,
+        219,
+        166
+      ],
+      "accounts": [
+        {
+          "name": "pool",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool.psp_wallet",
+                "account": "Pool"
+              },
+              {
+                "kind": "account",
+                "path": "pool.facility_id",
+                "account": "Pool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "drawdown",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  114,
+                  97,
+                  119,
+                  100,
+                  111,
+                  119,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool"
+              },
+              {
+                "kind": "arg",
+                "path": "drawdown_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "psp_usdc",
+          "writable": true
+        },
+        {
+          "name": "psp",
+          "signer": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "_drawdown_id",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "request_drawdown",
+      "docs": [
+        "PSP requests a drawdown. Caller must pass ALL currently-active",
+        "drawdowns in `remaining_accounts` to prove none are overdue."
+      ],
+      "discriminator": [
+        81,
+        80,
+        214,
+        241,
+        237,
+        162,
+        182,
+        167
+      ],
+      "accounts": [
+        {
+          "name": "pool",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool.psp_wallet",
+                "account": "Pool"
+              },
+              {
+                "kind": "account",
+                "path": "pool.facility_id",
+                "account": "Pool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "drawdown",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  114,
+                  97,
+                  119,
+                  100,
+                  111,
+                  119,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool"
+              },
+              {
+                "kind": "arg",
+                "path": "drawdown_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "psp_usdc",
+          "writable": true
+        },
+        {
+          "name": "psp",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "drawdown_id",
+          "type": "u64"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "tenor_days",
+          "type": "u32"
+        }
+      ]
+    },
+    {
+      "name": "settle_commit_fee",
+      "docs": [
+        "PSP pays accrued commit fee without repaying any drawdown. Required",
+        "at close-out (after last repay) to clear the final day's accrual."
+      ],
+      "discriminator": [
+        100,
+        233,
+        91,
+        177,
+        237,
+        61,
+        31,
+        168
+      ],
+      "accounts": [
+        {
+          "name": "pool",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool.psp_wallet",
+                "account": "Pool"
+              },
+              {
+                "kind": "account",
+                "path": "pool.facility_id",
+                "account": "Pool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "psp_usdc",
+          "writable": true
+        },
+        {
+          "name": "psp",
+          "signer": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "withdraw_funding",
+      "docs": [
+        "Lender exits during Funding. Burns LP tokens, returns USDC 1:1."
+      ],
+      "discriminator": [
+        135,
+        203,
+        195,
+        22,
+        171,
+        125,
+        255,
+        59
+      ],
+      "accounts": [
+        {
+          "name": "pool",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool.psp_wallet",
+                "account": "Pool"
+              },
+              {
+                "kind": "account",
+                "path": "pool.facility_id",
+                "account": "Pool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "lp_mint",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  112,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "lender_usdc",
+          "writable": true
+        },
+        {
+          "name": "lender_lp",
+          "writable": true
+        },
+        {
+          "name": "lender",
+          "signer": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Drawdown",
+      "discriminator": [
+        145,
+        107,
+        116,
+        119,
+        214,
+        245,
+        45,
+        209
+      ]
+    },
+    {
+      "name": "Pool",
+      "discriminator": [
+        241,
+        154,
+        109,
+        4,
+        17,
+        177,
+        109,
+        188
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "CommitFeeSettled",
+      "discriminator": [
+        82,
+        243,
+        113,
+        245,
+        37,
+        225,
+        11,
+        34
+      ]
+    },
+    {
+      "name": "DefaultDeclared",
+      "discriminator": [
+        199,
+        201,
+        228,
+        63,
+        226,
+        39,
+        62,
+        52
+      ]
+    },
+    {
+      "name": "Deposited",
+      "discriminator": [
+        111,
+        141,
+        26,
+        45,
+        161,
+        35,
+        100,
+        57
+      ]
+    },
+    {
+      "name": "DrawdownExecuted",
+      "discriminator": [
+        68,
+        70,
+        124,
+        59,
+        230,
+        207,
+        201,
+        245
+      ]
+    },
+    {
+      "name": "FacilityExecuted",
+      "discriminator": [
+        82,
+        37,
+        157,
+        63,
+        0,
+        105,
+        216,
+        223
+      ]
+    },
+    {
+      "name": "FundingCancelledEvent",
+      "discriminator": [
+        223,
+        21,
+        122,
+        178,
+        105,
+        52,
+        37,
+        186
+      ]
+    },
+    {
+      "name": "LpRedeemed",
+      "discriminator": [
+        232,
+        192,
+        98,
+        44,
+        177,
+        24,
+        2,
+        106
+      ]
+    },
+    {
+      "name": "PoolInitialized",
+      "discriminator": [
+        100,
+        118,
+        173,
+        87,
+        12,
+        198,
+        254,
+        229
+      ]
+    },
+    {
+      "name": "ProtocolFeesClaimed",
+      "discriminator": [
+        22,
+        228,
+        205,
+        252,
+        57,
+        17,
+        156,
+        252
+      ]
+    },
+    {
+      "name": "RepaymentProcessed",
+      "discriminator": [
+        4,
+        68,
+        8,
+        11,
+        109,
+        185,
+        23,
+        224
+      ]
+    },
+    {
+      "name": "WithdrawnFunding",
+      "discriminator": [
+        222,
+        200,
+        156,
+        148,
+        161,
+        112,
+        180,
+        20
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "Unauthorized",
+      "msg": "Only the authorized signer can perform this action"
+    },
+    {
+      "code": 6001,
+      "name": "ZeroAmount",
+      "msg": "Amount must be greater than zero"
+    },
+    {
+      "code": 6002,
+      "name": "ZeroRate",
+      "msg": "Rate must be greater than zero"
+    },
+    {
+      "code": 6003,
+      "name": "CapsInvalid",
+      "msg": "Soft cap must be <= hard cap"
+    },
+    {
+      "code": 6004,
+      "name": "FeeShareTooHigh",
+      "msg": "Protocol fee share must be <= 10000 bps"
+    },
+    {
+      "code": 6005,
+      "name": "DrawdownLimitExceedsCap",
+      "msg": "Max drawdown amount cannot exceed hard cap"
+    },
+    {
+      "code": 6006,
+      "name": "NameTooLong",
+      "msg": "PSP name too long (max 32 bytes)"
+    },
+    {
+      "code": 6007,
+      "name": "FacilityAlreadyActive",
+      "msg": "Facility is already active"
+    },
+    {
+      "code": 6008,
+      "name": "FacilityNotActive",
+      "msg": "Facility is not active"
+    },
+    {
+      "code": 6009,
+      "name": "FacilityDefaulted",
+      "msg": "Facility has been declared defaulted"
+    },
+    {
+      "code": 6010,
+      "name": "FundingCancelled",
+      "msg": "Funding round was cancelled by admin"
+    },
+    {
+      "code": 6011,
+      "name": "FacilityTenorExpired",
+      "msg": "Facility tenor has expired; no new drawdowns"
+    },
+    {
+      "code": 6012,
+      "name": "SoftCapNotMet",
+      "msg": "Soft cap not yet met"
+    },
+    {
+      "code": 6013,
+      "name": "WouldExceedHardCap",
+      "msg": "Deposit would exceed hard cap"
+    },
+    {
+      "code": 6014,
+      "name": "ExceedsCapital",
+      "msg": "Withdrawal exceeds capital deposited"
+    },
+    {
+      "code": 6015,
+      "name": "WrongDrawdownId",
+      "msg": "Drawdown id mismatch with pool.next_drawdown_id"
+    },
+    {
+      "code": 6016,
+      "name": "ExceedsMaxDrawdown",
+      "msg": "Amount exceeds per-drawdown maximum"
+    },
+    {
+      "code": 6017,
+      "name": "InsufficientLiquidity",
+      "msg": "Insufficient available liquidity in pool"
+    },
+    {
+      "code": 6018,
+      "name": "WrongActiveDrawdownCount",
+      "msg": "remaining_accounts count must equal pool.count_active_drawdowns"
+    },
+    {
+      "code": 6019,
+      "name": "WrongPool",
+      "msg": "Drawdown account references a different pool"
+    },
+    {
+      "code": 6020,
+      "name": "DrawdownAlreadyRepaid",
+      "msg": "Drawdown is already repaid"
+    },
+    {
+      "code": 6021,
+      "name": "OverdueDrawdownExists",
+      "msg": "An overdue drawdown exists; repay it first"
+    },
+    {
+      "code": 6022,
+      "name": "InvalidMint",
+      "msg": "Token account mint does not match pool USDC mint"
+    },
+    {
+      "code": 6023,
+      "name": "PoolNotClosed",
+      "msg": "Pool not closed (need: tenor expired + no active drawdowns + no unpaid commit fee)"
+    },
+    {
+      "code": 6024,
+      "name": "NoLpSupply",
+      "msg": "LP mint supply is zero"
+    },
+    {
+      "code": 6025,
+      "name": "NothingToSettle",
+      "msg": "Nothing to settle"
+    },
+    {
+      "code": 6026,
+      "name": "TooEarlyToDefault",
+      "msg": "Too early to declare default; wait until tenor + 30 day buffer"
+    },
+    {
+      "code": 6027,
+      "name": "ClockInvalid",
+      "msg": "Clock returned an invalid timestamp"
+    },
+    {
+      "code": 6028,
+      "name": "MathOverflow",
+      "msg": "Math overflow"
+    }
+  ],
+  "types": [
+    {
+      "name": "CommitFeeSettled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "protocol_cut",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "DefaultDeclared",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "day",
+            "type": "u32"
+          },
+          {
+            "name": "outstanding",
+            "type": "u64"
+          },
+          {
+            "name": "unpaid_commit_fee",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Deposited",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "lender",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Drawdown",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "id",
+            "type": "u64"
+          },
+          {
+            "name": "principal",
+            "type": "u64"
+          },
+          {
+            "name": "drawdown_day",
+            "type": "u32"
+          },
+          {
+            "name": "tenor_days",
+            "type": "u32"
+          },
+          {
+            "name": "repaid",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "DrawdownExecuted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "drawdown",
+            "type": "pubkey"
+          },
+          {
+            "name": "id",
+            "type": "u64"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "tenor_days",
+            "type": "u32"
+          },
+          {
+            "name": "drawdown_day",
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "FacilityExecuted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "activated_day",
+            "type": "u32"
+          },
+          {
+            "name": "total_capital",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "FundingCancelledEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "total_capital_at_cancel",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "InitializePoolArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "psp_wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "psp_name",
+            "type": "string"
+          },
+          {
+            "name": "facility_id",
+            "type": "u64"
+          },
+          {
+            "name": "soft_cap",
+            "type": "u64"
+          },
+          {
+            "name": "hard_cap",
+            "type": "u64"
+          },
+          {
+            "name": "max_drawdown_amount",
+            "type": "u64"
+          },
+          {
+            "name": "facility_tenor_days",
+            "type": "u32"
+          },
+          {
+            "name": "utilization_rate_bps",
+            "type": "u16"
+          },
+          {
+            "name": "commitment_rate_bps",
+            "type": "u16"
+          },
+          {
+            "name": "penalty_rate_bps",
+            "type": "u16"
+          },
+          {
+            "name": "grace_days",
+            "type": "u8"
+          },
+          {
+            "name": "penalty_days",
+            "type": "u8"
+          },
+          {
+            "name": "protocol_fee_share_bps",
+            "type": "u16"
+          },
+          {
+            "name": "seconds_per_day",
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LpRedeemed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "lender",
+            "type": "pubkey"
+          },
+          {
+            "name": "lp_burned",
+            "type": "u64"
+          },
+          {
+            "name": "usdc_paid",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Pool",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "psp_wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "psp_name",
+            "type": "string"
+          },
+          {
+            "name": "facility_id",
+            "type": "u64"
+          },
+          {
+            "name": "usdc_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "lp_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "soft_cap",
+            "type": "u64"
+          },
+          {
+            "name": "hard_cap",
+            "type": "u64"
+          },
+          {
+            "name": "max_drawdown_amount",
+            "type": "u64"
+          },
+          {
+            "name": "facility_tenor_days",
+            "type": "u32"
+          },
+          {
+            "name": "utilization_rate_bps",
+            "type": "u16"
+          },
+          {
+            "name": "commitment_rate_bps",
+            "type": "u16"
+          },
+          {
+            "name": "penalty_rate_bps",
+            "type": "u16"
+          },
+          {
+            "name": "grace_days",
+            "type": "u8"
+          },
+          {
+            "name": "penalty_days",
+            "type": "u8"
+          },
+          {
+            "name": "protocol_fee_share_bps",
+            "type": "u16"
+          },
+          {
+            "name": "seconds_per_day",
+            "type": "u32"
+          },
+          {
+            "name": "is_active",
+            "type": "bool"
+          },
+          {
+            "name": "is_defaulted",
+            "type": "bool"
+          },
+          {
+            "name": "is_cancelled",
+            "type": "bool"
+          },
+          {
+            "name": "created_day",
+            "type": "u32"
+          },
+          {
+            "name": "activated_day",
+            "type": "u32"
+          },
+          {
+            "name": "total_capital",
+            "type": "u64"
+          },
+          {
+            "name": "outstanding_principal",
+            "type": "u64"
+          },
+          {
+            "name": "today_day",
+            "type": "u32"
+          },
+          {
+            "name": "today_peak_outstanding",
+            "type": "u64"
+          },
+          {
+            "name": "accrued_commit_fee",
+            "type": "u64"
+          },
+          {
+            "name": "accrued_util_fee",
+            "type": "u64"
+          },
+          {
+            "name": "accrued_penalty_fee",
+            "type": "u64"
+          },
+          {
+            "name": "protocol_fees_owed",
+            "type": "u64"
+          },
+          {
+            "name": "next_drawdown_id",
+            "type": "u64"
+          },
+          {
+            "name": "count_active_drawdowns",
+            "type": "u32"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "vault_bump",
+            "type": "u8"
+          },
+          {
+            "name": "lp_mint_bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PoolInitialized",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "psp_wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "facility_id",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProtocolFeesClaimed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RepaymentProcessed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "drawdown",
+            "type": "pubkey"
+          },
+          {
+            "name": "principal",
+            "type": "u64"
+          },
+          {
+            "name": "util_fee",
+            "type": "u64"
+          },
+          {
+            "name": "penalty_fee",
+            "type": "u64"
+          },
+          {
+            "name": "protocol_cut",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "WithdrawnFunding",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "lender",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    }
+  ]
+}

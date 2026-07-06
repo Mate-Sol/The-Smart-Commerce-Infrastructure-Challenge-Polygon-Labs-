@@ -1,0 +1,46 @@
+{
+  "name": "defa-psp-backend",
+  "version": "1.0.0",
+  "description": "CredMate PSP Backend API with MongoDB and Solana smart contract integration",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "seed": "node seed.js",
+    "test": "node --test test/observerAuth.test.js test/lifecycle.test.js test/txHash.test.js"
+  },
+  "keywords": [
+    "express",
+    "mongodb",
+    "blockchain",
+    "defi"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@azure/storage-blob": "^12.27.0",
+    "@coral-xyz/anchor": "^0.31.1",
+    "@sendgrid/mail": "^8.1.6",
+    "@sentry/node": "^10.52.0",
+    "@solana/spl-token": "^0.4.9",
+    "@solana/web3.js": "^1.95.4",
+    "axios": "^1.13.4",
+    "bcryptjs": "^2.4.3",
+    "bs58": "^6.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^4.18.2",
+    "express-rate-limit": "^8.5.1",
+    "express-validator": "^7.0.1",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.0.0",
+    "multer": "^2.1.1",
+    "node-cron": "^4.2.1",
+    "nodemailer": "^8.0.7",
+    "tweetnacl": "^1.0.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}
