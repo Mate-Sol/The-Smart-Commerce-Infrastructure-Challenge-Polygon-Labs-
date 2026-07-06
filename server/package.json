@@ -8,7 +8,7 @@
     "start": "node index.js",
     "dev": "nodemon index.js",
     "seed": "node seed.js",
-    "test": "node --test test/observerAuth.test.js test/lifecycle.test.js test/txHash.test.js test/poolServiceEvm.test.js"
+    "test": "node --test test/observerAuth.test.js test/lifecycle.test.js test/txHash.test.js test/poolServiceEvm.test.js test/evmIndexer.test.js"
   },
   "keywords": [
     "express",
