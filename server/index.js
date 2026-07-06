@@ -27,7 +27,10 @@ connectDB();
 // Initialize scheduled jobs (credit maintenance)
 const { initializeScheduledJobs } = require('./config/scheduler');
 const { startOverdueWatcher } = require('./workers/overdueWatcher');
-const { start: startSolanaIndexer } = require('./workers/solanaIndexer');
+// Chunk B3c: swap Solana indexer → EVM indexer. The EVM indexer refuses
+// to boot until PAYFI_FACTORY_ADDRESS is set (guarded start), so dev envs
+// without a deploy stay quiet instead of stack-tracing every 30s.
+const { start: startEvmIndexer } = require('./workers/evmIndexer');
 const { start: startPoolAggregatesIndexer } = require('./workers/poolAggregatesIndexer');
 
 // CORS — accepts the configured production frontend AND any localhost
@@ -148,8 +151,13 @@ app.listen(PORT, () => {
   // Start background workers
   startOverdueWatcher();
   initializeScheduledJobs();
-  startSolanaIndexer();
-  startPoolAggregatesIndexer();
+  startEvmIndexer();
+  // Chunk B3c: poolAggregatesIndexer is still Solana-only (uses
+  // getConnection() + Anchor scans). Disabled until it's ported to EVM
+  // events — the primary evmIndexer already keeps PoolState + DrawdownState
+  // fresh, which is all the lender-v2 UI needs. Re-enable in a later
+  // batch that ports it to ethers.
+  // startPoolAggregatesIndexer();
 });
 
 module.exports = app;

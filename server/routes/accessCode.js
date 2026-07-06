@@ -4,7 +4,7 @@ const jwt = require('jsonwebtoken');
 const router = express.Router();
 
 const { authMiddleware, authorizeRoles } = require('../middleware/auth');
-const { verifySignature } = require('../services/walletAuth');
+const { verifySignature } = require('../services/walletAuthEvm');
 const AccessCode = require('../models/AccessCode');
 const Lender = require('../models/Lender');
 
@@ -116,13 +116,14 @@ router.post('/access-code/redeem', async (req, res) => {
     const wallet    = (req.body?.wallet || '').trim();
     const nonce     = req.body?.nonce;
     const signature = req.body?.signature;
+    const message   = req.body?.message;
 
-    if (!codeStr || !name || !email || !wallet || !nonce || !signature) {
-      return res.status(400).json({ message: 'code, name, email, wallet, nonce, signature all required' });
+    if (!codeStr || !name || !email || !wallet || !nonce || !signature || !message) {
+      return res.status(400).json({ message: 'code, name, email, wallet, nonce, signature, message all required' });
     }
 
-    // 1. Verify wallet ownership via signed nonce.
-    const verifiedWallet = await verifySignature({ wallet, nonce, signature, purpose: 'login' });
+    // 1. Verify wallet ownership via SIWE signature over the issued message.
+    const verifiedWallet = await verifySignature({ wallet, nonce, signature, message, purpose: 'login' });
 
     // 2. Atomically claim the code: only consumes it if still unused
     //    AND not expired.

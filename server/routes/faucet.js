@@ -1,73 +1,74 @@
 /**
- * USDC-DF faucet — devnet/test only.
+ * USDC-DF faucet — testnet only. EVM edition.
  *
  * POST /faucet/usdc-df
- *   body: { wallet: "<base58 pubkey>" }
+ *   body: { wallet: "0x…" }
  *
- * Mints `GRANT_PER_CALL` (1M USDC-DF, 6 decimals) to the recipient's
- * associated token account. Per-wallet lifetime cap of `LIFETIME_CAP`
- * (10M USDC-DF). Cooldown of `COOLDOWN_MS` between calls.
+ * Mints `GRANT_PER_CALL` (1M USDC, 6 decimals) to the recipient's EVM
+ * address by calling `MockStablecoin.mint(to, amount)`. Server holds the
+ * mint authority (AGENT_PRIVATE_KEY, doubling as the faucet key here for
+ * simplicity — split via FAUCET_AUTHORITY_PRIVATE_KEY in prod).
  *
- * Auth: open endpoint (anyone with a wallet can claim). Rate limit is
- * enforced by the per-wallet `FaucetClaim` record, not by IP, so the same
- * wallet can't bypass via multiple IPs.
+ * Auth: open endpoint. Rate limit + lifetime cap tracked per wallet in
+ * FaucetClaim so the same address can't bypass by hitting from many IPs.
  *
- * Server holds the mint authority (FAUCET_AUTHORITY_PRIVATE_KEY). This is
- * fine for a fake test token; the production env (mainnet USDC) skips this
- * route entirely by setting USDC_DF_MINT_ADDRESS empty.
+ * Production (real USDC) skips this route entirely by leaving
+ * PAYFI_STABLECOIN_ADDRESS pointed at a real USDC contract with no mint
+ * function — the mint() call reverts, the endpoint responds 500, and
+ * you should reverse-proxy this route to /dev/null anyway.
  */
+
+'use strict';
 
 const express = require('express');
 const router = express.Router();
-const {
-  PublicKey,
-  Transaction,
-  ComputeBudgetProgram,
-  sendAndConfirmTransaction,
-} = require('@solana/web3.js');
-const {
-  getOrCreateAssociatedTokenAccount,
-  createMintToInstruction,
-} = require('@solana/spl-token');
+const { ethers } = require('ethers');
 
 const FaucetClaim = require('../models/FaucetClaim');
 const {
-  getConnection,
-  getFaucetAuthority,
-  getFeePayer,
-  getUsdcDfMint,
-} = require('../services/solanaService');
+  getProvider,
+  getStablecoinAddress,
+  getAgentSigner,   // AGENT_PRIVATE_KEY — used as faucet mint authority here
+  getFaucetSigner,  // FAUCET_AUTHORITY_PRIVATE_KEY (optional split)
+} = require('../config/chain');
+const { ERC20Abi } = require('../abis');
 
 const USDC_DECIMALS = 6n;
 const ONE_USDC = 10n ** USDC_DECIMALS;
 const GRANT_PER_CALL = 1_000_000n * ONE_USDC; // 1M USDC-DF
-const LIFETIME_CAP = 10_000_000n * ONE_USDC;  // 10M USDC-DF
-const COOLDOWN_MS = 60 * 1000;                 // 1 minute between calls
+const LIFETIME_CAP   = 10_000_000n * ONE_USDC; // 10M USDC-DF
+const COOLDOWN_MS    = 60 * 1000;              // 1 minute between calls
+
+function faucetSignerOrNull() {
+  // Prefer a dedicated FAUCET_AUTHORITY_PRIVATE_KEY when configured;
+  // otherwise fall back to the AGENT signer so a single-key hackathon
+  // deployment "just works". Return null if neither is set — the route
+  // then 503s cleanly.
+  try { return getFaucetSigner(); } catch {}
+  try { return getAgentSigner();  } catch {}
+  return null;
+}
 
 router.post('/usdc-df', async (req, res) => {
   try {
-    const { wallet } = req.body || {};
-    if (!wallet || typeof wallet !== 'string') {
-      return res.status(400).json({ message: 'wallet (base58 pubkey) required' });
+    const walletRaw = req.body?.wallet;
+    if (!walletRaw || typeof walletRaw !== 'string') {
+      return res.status(400).json({ message: 'wallet (0x-prefixed address) required' });
     }
+    let wallet;
+    try { wallet = ethers.getAddress(walletRaw); }
+    catch { return res.status(400).json({ message: 'wallet is not a valid EVM address' }); }
 
-    let recipient;
-    try {
-      recipient = new PublicKey(wallet);
-    } catch {
-      return res.status(400).json({ message: 'wallet is not a valid base58 Solana pubkey' });
+    const signer = faucetSignerOrNull();
+    if (!signer) {
+      return res.status(503).json({ message: 'Faucet not configured on this environment' });
     }
+    let stablecoinAddress;
+    try { stablecoinAddress = getStablecoinAddress(); }
+    catch { return res.status(503).json({ message: 'PAYFI_STABLECOIN_ADDRESS not set' }); }
 
-    const mint = getUsdcDfMint();
-    const mintAuthority = getFaucetAuthority();
-    if (!mint || !mintAuthority) {
-      return res.status(503).json({
-        message: 'Faucet not configured on this environment',
-      });
-    }
-
-    // Per-wallet cap + cooldown enforcement.
-    const claim = await FaucetClaim.findOne({ wallet: recipient.toBase58() });
+    // Per-wallet cap + cooldown check
+    const claim = await FaucetClaim.findOne({ wallet });
     const totalMinted = BigInt(claim?.totalMinted || '0');
     if (totalMinted + GRANT_PER_CALL > LIFETIME_CAP) {
       return res.status(429).json({
@@ -86,50 +87,36 @@ router.post('/usdc-df', async (req, res) => {
       });
     }
 
-    const connection = getConnection();
-    const feePayer = getFeePayer() || mintAuthority;
+    // Fire the mint tx. MockStablecoin.mint(to, amount) → non-revert path.
+    // Real USDC reverts here (no `mint` externally), and we bubble the
+    // revert reason up.
+    const token = new ethers.Contract(stablecoinAddress, ERC20Abi, signer);
+    let receipt;
+    try {
+      const tx = await token.mint(wallet, GRANT_PER_CALL);
+      receipt = await tx.wait();
+    } catch (e) {
+      const reason = e.shortMessage || e.reason || e.message;
+      // If revert reads like "function selector not recognized" the
+      // stablecoin isn't a mintable MockStablecoin — that's an expected
+      // configuration outcome, not a server error.
+      return res.status(400).json({
+        message: 'Mint failed',
+        reason,
+      });
+    }
 
-    // Ensure recipient has an ATA. This will create it (paying rent from
-    // mintAuthority). spl-token's helper signs on behalf of the payer and
-    // the owner is just a key reference — no signature required from the
-    // recipient.
-    const recipientAta = await getOrCreateAssociatedTokenAccount(
-      connection,
-      mintAuthority, // payer for ATA rent
-      mint,
-      recipient
-    );
-
-    const tx = new Transaction().add(
-      ComputeBudgetProgram.setComputeUnitLimit({ units: 60_000 }),
-      createMintToInstruction(
-        mint,
-        recipientAta.address,
-        mintAuthority.publicKey,
-        GRANT_PER_CALL
-      )
-    );
-
-    const signers = feePayer.publicKey.equals(mintAuthority.publicKey)
-      ? [mintAuthority]
-      : [feePayer, mintAuthority];
-    tx.feePayer = feePayer.publicKey;
-
-    const txSignature = await sendAndConfirmTransaction(connection, tx, signers, {
-      commitment: 'confirmed',
-    });
-
-    // Persist claim record.
+    // Persist claim record
     const newTotal = (totalMinted + GRANT_PER_CALL).toString();
     await FaucetClaim.findOneAndUpdate(
-      { wallet: recipient.toBase58() },
+      { wallet },
       {
         $set: { totalMinted: newTotal, lastClaimAt: new Date() },
         $inc: { callCount: 1 },
         $push: {
           history: {
             amount: GRANT_PER_CALL.toString(),
-            txSignature,
+            txSignature: receipt.hash,  // keeping field name; value is now an EVM tx hash
             claimedAt: new Date(),
           },
         },
@@ -139,13 +126,14 @@ router.post('/usdc-df', async (req, res) => {
 
     res.json({
       success: true,
-      wallet: recipient.toBase58(),
-      mint: mint.toBase58(),
-      ata: recipientAta.address.toBase58(),
+      wallet,
+      mint: stablecoinAddress,
       amount: GRANT_PER_CALL.toString(),
       totalMinted: newTotal,
       remaining: (LIFETIME_CAP - totalMinted - GRANT_PER_CALL).toString(),
-      txSignature,
+      txSignature: receipt.hash,       // legacy field name preserved
+      txHash: receipt.hash,            // canonical EVM name too
+      blockNumber: receipt.blockNumber,
     });
   } catch (err) {
     console.error('[faucet] error:', err);
@@ -155,9 +143,12 @@ router.post('/usdc-df', async (req, res) => {
 
 router.get('/usdc-df/status/:wallet', async (req, res) => {
   try {
-    const claim = await FaucetClaim.findOne({ wallet: req.params.wallet });
+    let addr;
+    try { addr = ethers.getAddress(req.params.wallet); }
+    catch { return res.status(400).json({ message: 'Invalid EVM address' }); }
+    const claim = await FaucetClaim.findOne({ wallet: addr });
     res.json({
-      wallet: req.params.wallet,
+      wallet: addr,
       totalMinted: claim?.totalMinted || '0',
       callCount: claim?.callCount || 0,
       remaining: (LIFETIME_CAP - BigInt(claim?.totalMinted || '0')).toString(),

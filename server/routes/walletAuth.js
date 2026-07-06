@@ -21,10 +21,15 @@ const router = express.Router();
 const jwt = require('jsonwebtoken');
 
 const { authMiddleware } = require('../middleware/auth');
-const { issueNonce, verifySignature } = require('../services/walletAuth');
+// SIWE (EIP-4361) — Chunk B3c swap from services/walletAuth (SIWS).
+// Same public API (issueNonce / verifySignature) so the route bodies
+// don't change shape; verifySignature also accepts a `message` field
+// now — clients must pass the SIWE payload they signed.
+const { issueNonce, verifySignature } = require('../services/walletAuthEvm');
 const Lender = require('../models/Lender');
 const PSPProfile = require('../models/PSPProfile');
 const User = require('../models/User');
+const { isOnchainAdmin } = require('../config/chain');
 
 router.post('/nonce', async (req, res) => {
   try {
@@ -39,11 +44,11 @@ router.post('/nonce', async (req, res) => {
 
 router.post('/login', async (req, res) => {
   try {
-    const { wallet, nonce, signature } = req.body || {};
-    if (!wallet || !nonce || !signature) {
-      return res.status(400).json({ message: 'wallet, nonce, signature required' });
+    const { wallet, nonce, signature, message } = req.body || {};
+    if (!wallet || !nonce || !signature || !message) {
+      return res.status(400).json({ message: 'wallet, nonce, signature, message required' });
     }
-    const verifiedWallet = await verifySignature({ wallet, nonce, signature, purpose: 'login' });
+    const verifiedWallet = await verifySignature({ wallet, nonce, signature, message, purpose: 'login' });
 
     // Lender access is gated by access codes — the wallet must already be
     // bound to a Lender record (created during /access-code/redeem). If
@@ -90,21 +95,22 @@ router.post('/login', async (req, res) => {
  */
 router.post('/onchain-admin/login', async (req, res) => {
   try {
-    const { wallet, nonce, signature } = req.body || {};
-    if (!wallet || !nonce || !signature) {
-      return res.status(400).json({ message: 'wallet, nonce, signature required' });
+    const { wallet, nonce, signature, message } = req.body || {};
+    if (!wallet || !nonce || !signature || !message) {
+      return res.status(400).json({ message: 'wallet, nonce, signature, message required' });
     }
 
-    const allowlistRaw = process.env.ONCHAIN_ADMIN_WALLETS || '';
-    const allowlist = allowlistRaw.split(/[,\s]+/).filter(Boolean);
-    if (!allowlist.includes(wallet)) {
+    // Case-insensitive check — EIP-55 checksum casing is user-facing and
+    // shouldn't gate access. The chain config layer normalises to
+    // lowercased entries; delegate.
+    if (!isOnchainAdmin(wallet)) {
       return res.status(403).json({
         message: 'Wallet not on the on-chain admin allowlist',
         wallet,
       });
     }
 
-    const verifiedWallet = await verifySignature({ wallet, nonce, signature, purpose: 'login' });
+    const verifiedWallet = await verifySignature({ wallet, nonce, signature, message, purpose: 'login' });
 
     // Find-or-create the shadow User record. Use a deterministic email so
     // the User schema's unique-email constraint passes and we can re-find
@@ -150,11 +156,11 @@ router.post('/bind', authMiddleware, async (req, res) => {
         message: 'Lender accounts are wallet-only and already bound',
       });
     }
-    const { wallet, nonce, signature } = req.body || {};
-    if (!wallet || !nonce || !signature) {
-      return res.status(400).json({ message: 'wallet, nonce, signature required' });
+    const { wallet, nonce, signature, message } = req.body || {};
+    if (!wallet || !nonce || !signature || !message) {
+      return res.status(400).json({ message: 'wallet, nonce, signature, message required' });
     }
-    const verifiedWallet = await verifySignature({ wallet, nonce, signature, purpose: 'bind' });
+    const verifiedWallet = await verifySignature({ wallet, nonce, signature, message, purpose: 'bind' });
 
     // PSPs bind on PSPProfile (matches existing schema's walletAddress array
     // for backward compat, plus new solanaWallet field for the canonical
