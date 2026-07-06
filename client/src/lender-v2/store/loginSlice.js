@@ -1,4 +1,12 @@
-import { getUsdcBalance } from "@/stellar/stellarMethod";
+/**
+ * userSlice — lender identity + session.
+ *
+ * Chunk D3: dropped the getUserTokensBlances thunk that read USDC balance
+ * from a Stellar contract client. wagmi's useReadContract (in the
+ * useWalletConnect hook) now feeds `chainSlice.usdcBalance` directly, so
+ * this slice can stay focused on identity + session state.
+ */
+
 import { createSlice } from "@reduxjs/toolkit";
 
 const initialState = {
@@ -15,7 +23,6 @@ const userSlice = createSlice({
       state.success = true;
     },
     updateTokenBalance: (state, action) => {
-      console.log("🚀 ~ action.payload:", action.payload);
       state.user = {
         ...state.user,
         usdc: action.payload.usdc,
@@ -23,37 +30,12 @@ const userSlice = createSlice({
       };
       state.success = true;
     },
-
     logOut: (state) => {
       state.user = null;
       state.success = false;
     },
   },
 });
-
-export function getUserTokensBlances(address, chain, signTransaction) {
-  console.log("🚀 ~ getUserTokensBlances ~ address, chain:", address, chain);
-  return async (dispatch) => {
-    try {
-      debugger;
-      const usdc = await getUsdcBalance(address, signTransaction);
-      // const dlp = await getDefaLpTokensBalance(
-      //   chain?.chainId,
-      //   address,
-      //   "Low Risk Pool"
-      // );
-      console.log("🚀 ~ return ~ usdc:", usdc);
-      dispatch(
-        updateTokenBalance({
-          usdc: usdc < 0.000001 ? 0 : usdc,
-          // dlp: dlp < 0.000001 ? 0 : dlp,
-        }),
-      );
-    } catch (error) {
-      console.log("🚀 ~ getUserTokensBlances ~ error:", error);
-    }
-  };
-}
 
 export const { loginSuccess, logOut, updateTokenBalance } = userSlice.actions;
 export default userSlice.reducer;
