@@ -1,111 +1,146 @@
-import { useEffect } from "react";
-import { useDispatch, useSelector } from "react-redux";
+/**
+ * Wallet-connect hook — Chunk D1 swap: Freighter (Stellar) → wagmi (EVM).
+ *
+ * Same public API as the pre-swap version so pages that consumed it
+ * (Dashboard, PoolDetails, Layout) keep working:
+ *
+ *   { connect, disconnect,
+ *     walletAddress, walletStatus, walletError,
+ *     usdcBalance,
+ *     isConnected, isConnecting }
+ *
+ * Internally, this now bridges wagmi's `useAccount / useConnect /
+ * useDisconnect / useReadContract` into the same Redux chainSlice
+ * shape the rest of the lender-v2 UI reads.
+ */
+
+import { useEffect, useMemo } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import {
+  useAccount,
+  useConnect,
+  useDisconnect,
+  useReadContract,
+} from 'wagmi';
+import { formatUnits } from 'viem';
+import { toast } from 'react-toastify';
+
 import {
   setWalletConnecting,
   setWalletConnected,
   setWalletError,
   setUsdcBalance,
   disconnectWallet,
-} from "@/store/chainSlice";
-import { getAddress, isConnected, setAllowed } from "@stellar/freighter-api";
-import { getUsdcBalance } from "@/stellar/stellarMethod";
-import { validateWalletMatch } from "@/libs/utils/utils";
-import { toast } from "react-toastify";
+} from '@/store/chainSlice';
 
-// ── Stellar (Freighter) ──────────────────────────────────────────────────────
-const connectStellar = async () => {
-  const connected = await isConnected();
-  if (!connected.isConnected) {
-    throw new Error(
-      "Freighter wallet is not installed. Please install it from the Chrome Web Store.",
-    );
-  }
+// Minimal ERC-20 fragment for balance reads.
+const ERC20_BALANCE_ABI = [
+  {
+    type: 'function',
+    name: 'balanceOf',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'decimals',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'uint8' }],
+  },
+];
 
-  await setAllowed();
+// Stablecoin address is env-driven per repo (see .env.example).
+const STABLECOIN_ADDRESS = import.meta.env.VITE_STABLECOIN_ADDRESS || '';
 
-  const { address, error } = await getAddress();
-  if (error) throw new Error(error.message ?? "Failed to get Stellar address");
-  if (!address) throw new Error("No address returned from Freighter.");
-
-  return address;
-};
-
-// ── Chain connector map ──────────────────────────────────────────────────────
-const connectors = {
-  stellar: connectStellar,
-  // starknet: connectStarknet,
-  // evm:      connectEvm,
-  // zigchain: connectZigchain,
-};
-
-// ── USDC balance fetcher map (add more chains here as you integrate them) ────
-const balanceFetchers = {
-  stellar: getUsdcBalance,
-  // starknet: getStarknetUsdcBalance,
-  // evm:      getEvmUsdcBalance,
-  // zigchain: getZigchainUsdcBalance,
-};
-
-// ── Hook ─────────────────────────────────────────────────────────────────────
 export function useWalletConnect() {
   const dispatch = useDispatch();
-  const { selected, walletAddress, walletStatus, walletError, usdcBalance } =
-    useSelector((s) => s.chain);
+  const chainState = useSelector((s) => s.chain);
 
-  const isConnected = walletStatus === "connected";
-  const isConnecting = walletStatus === "connecting";
+  // ── wagmi hooks ──────────────────────────────────────────────────
+  const { address, isConnected, isConnecting: wagmiConnecting, status } = useAccount();
+  const { connectors, connectAsync, isPending: connectorPending } = useConnect();
+  const { disconnectAsync } = useDisconnect();
 
-  const fetchUsdcBalance = async () => {
-    const chainType = validateWalletMatch(walletAddress);
-    const fetcher = balanceFetchers[chainType.toLowerCase()];
-    if (!fetcher) return;
-
-    try {
-      const balance = await fetcher(walletAddress);
-      dispatch(setUsdcBalance(balance));
-    } catch (err) {
-      console.error("Failed to fetch USDC balance:", err);
-      dispatch(setUsdcBalance(null));
+  // ── Sync wagmi state → Redux ────────────────────────────────────
+  // Redux keeps the historical shape { walletAddress, walletStatus, ... }
+  // so other pages can useSelector without refactoring.
+  useEffect(() => {
+    if (isConnected && address) {
+      dispatch(setWalletConnected(address));
+    } else if (wagmiConnecting || connectorPending) {
+      dispatch(setWalletConnecting());
+    } else if (status === 'disconnected') {
+      // Only reset if we had a wallet before — avoids stomping initial state.
+      if (chainState.walletAddress) dispatch(disconnectWallet());
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isConnected, address, wagmiConnecting, connectorPending, status, dispatch]);
+
+  // ── USDC balance ────────────────────────────────────────────────
+  const {
+    data: usdcBalanceRaw,
+    refetch: refetchBalance,
+  } = useReadContract({
+    address: STABLECOIN_ADDRESS || undefined,
+    abi: ERC20_BALANCE_ABI,
+    functionName: 'balanceOf',
+    args: address ? [address] : undefined,
+    query: {
+      enabled: !!(address && STABLECOIN_ADDRESS),
+      // Refresh every ~15s while page is open so the wallet card doesn't
+      // go stale after a deposit.
+      refetchInterval: 15_000,
+    },
+  });
 
   useEffect(() => {
-    if (walletAddress) fetchUsdcBalance();
-  }, [walletAddress]);
+    if (usdcBalanceRaw !== undefined) {
+      // USDC has 6 decimals on payfi_v1's MockStablecoin (matches real USDC).
+      const formatted = Number(formatUnits(usdcBalanceRaw, 6));
+      dispatch(setUsdcBalance(formatted < 0.000001 ? 0 : formatted));
+    }
+  }, [usdcBalanceRaw, dispatch]);
 
+  // ── Actions ─────────────────────────────────────────────────────
   const connect = async () => {
-    const connector = connectors[selected?.key];
-    if (!connector) {
-      const msg = `No wallet connector for chain: ${selected?.label}`;
-      dispatch(setWalletError(msg));
-      toast.error(msg);
-      return;
-    }
-
-    dispatch(setWalletConnecting());
     try {
-      const address = await connector();
-      dispatch(setWalletConnected(address));
-      toast.success("Wallet connected successfully.");
+      // Prefer the injected connector (MetaMask, Rabby, etc.) — RainbowKit
+      // handles the modal separately if the caller wants the full UI.
+      const injected = connectors.find((c) => c.type === 'injected') || connectors[0];
+      if (!injected) throw new Error('No wallet connectors available');
+      dispatch(setWalletConnecting());
+      await connectAsync({ connector: injected });
+      toast.success('Wallet connected.');
     } catch (err) {
-      const msg = err.message ?? "Wallet connection failed";
+      const msg = err?.shortMessage || err?.message || 'Wallet connection failed';
       dispatch(setWalletError(msg));
       toast.error(msg);
     }
   };
 
-  function disconnect() {
+  const disconnect = async () => {
+    try { await disconnectAsync(); } catch { /* wagmi throws if not connected */ }
     dispatch(disconnectWallet());
-  }
-
-  return {
-    connect,
-    disconnect,
-    walletAddress,
-    walletStatus,
-    walletError,
-    usdcBalance,
-    isConnected,
-    isConnecting,
   };
+
+  return useMemo(
+    () => ({
+      connect,
+      disconnect,
+      refetchBalance,
+      walletAddress: chainState.walletAddress || address || null,
+      walletStatus: chainState.walletStatus,
+      walletError: chainState.walletError,
+      usdcBalance: chainState.usdcBalance,
+      isConnected,
+      isConnecting: wagmiConnecting || connectorPending,
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      chainState.walletAddress, chainState.walletStatus, chainState.walletError,
+      chainState.usdcBalance, address, isConnected, wagmiConnecting, connectorPending,
+    ]
+  );
 }
