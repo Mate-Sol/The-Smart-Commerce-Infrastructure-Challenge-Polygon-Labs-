@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { MOCK_POOLS } from "../Mock/mock_data";
 import PoolInfoCard from "../components/ui/PoolInfoCard";
 import DepositForm from "../dashboard/DepositForm";
 import BusinessOverview from "../dashboard/BusinessOverview";
@@ -13,9 +12,11 @@ import Card from "../components/ui/Card";
 import { TrendingUp, Wallet, BarChart2, PieChart } from "lucide-react";
 import StateCard from "@/components/ui/StateCard";
 import { getChainIcon, chainOptions } from "@/libs/utils/chainIcons";
-import { axiosInstance } from "@/libs/axios";
 import { useSelector } from "react-redux";
 import { toast } from "react-toastify";
+// Chunk D2: real BE reads via services/evm.api + payfi_v1 → deal adapter.
+import { api } from "../../services/evm";
+import { mapPoolToDeal } from "../libs/poolAdapter";
 
 const TABS = [
   { id: "my-position", label: "My Position" },
@@ -40,42 +41,29 @@ const PoolDetails = () => {
     chainOptions.find((c) => c?.key === deal?.chain) || chainOptions[0];
 
   const handleDealDetails = async () => {
+    // dealId in the URL is the payfi_v1 pool contract address (0x…).
     if (!dealId) return;
     try {
-      const res = await axiosInstance.get(
-        `/marketPlaces/getDealsById/${dealId}`,
-      );
-      const deal = res;
-      // Check if current user has lended
-      const isLendedByThisUser = deal?.poolLenders.find(
-        (lender) => lender?.lenderId === userData?._id,
-      );
-      if (!deal?.poolAddress) {
-        // If no pool exists yet, set defaults
-        setDeal({
-          ...deal,
-          amountCollected: 0,
-          isLendedByThisUser: !!isLendedByThisUser,
-          poolMatureTime: 0,
-          bufferTime: 0,
-          poolEndTime: 0,
-          isMatured: false,
-          isBufferedDays: false,
-          poolClosed: false,
-          showEnableClaim: false,
-          isEnableClaimBack: false,
-          isSoftCapReached: false,
-        });
-      } else {
-        // Update deal state
-        setDeal({
-          ...deal,
-          isLendedByThisUser: !!isLendedByThisUser,
-        });
-      }
+      const { data: pool } = await api().get(`/pool/${dealId}/state`);
+      const mapped = mapPoolToDeal(pool);
+      // Layer in the derived flags the UI reads for enable-claim / matured
+      // states. Timestamps are UNIX-seconds; compare to now/1000.
+      const nowSec = Math.floor(Date.now() / 1000);
+      setDeal({
+        ...mapped,
+        isLendedByThisUser: false, // TODO wire from /lender/portfolio when we have user state
+        amountCollected: mapped.poolAmountRaised,
+        bufferTime: 0,
+        isMatured: mapped.poolMatureTime > 0 && nowSec >= mapped.poolMatureTime,
+        isBufferedDays: false,
+        poolClosed: pool?.isCancelled || pool?.isDefaulted,
+        showEnableClaim: false,
+        isEnableClaimBack: false,
+        isSoftCapReached: mapped.poolAmountRaised >= mapped.softCap,
+      });
     } catch (error) {
       console.log("error", error);
-      toast.error(error);
+      toast.error(error?.response?.data?.message || error?.message || 'Failed to load pool');
     }
   };
   useEffect(() => {

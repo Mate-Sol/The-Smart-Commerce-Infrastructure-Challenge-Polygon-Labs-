@@ -2,18 +2,20 @@ import React, { useState } from "react";
 import Button from "../components/ui/Button";
 import Typography from "../components/ui/Typography";
 import { Zap } from "lucide-react";
-import { useWalletConnect } from "@/hooks/useWalletConnect";
-import { validateWalletMatch } from "@/libs/utils/utils";
+import { useAccount, useSendTransaction } from "wagmi";
 import { toast } from "react-toastify";
-import { useSelector } from "react-redux";
+// Chunk D2: real deposit path via services/evm.buildAndSendSteps
+// (approve + deposit sequence against payfi_v1 pool contract).
+import { buildAndSendSteps } from "../../services/evm";
 
 const DepositForm = ({ walletBalance, currency, apy = "3.63", deal }) => {
-  // const userData = useSelector((s) => s.auth.user);
-  const { connect, walletAddress, usdcBalance } = useWalletConnect();
+  const { address, isConnected } = useAccount();
+  const { sendTransactionAsync } = useSendTransaction();
 
   const [usdcAmount, setUsdcAmount] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  const maxBalance = parseFloat(walletBalance.replace(/,/g, "")) || 0;
+  const maxBalance = parseFloat(String(walletBalance || '0').replace(/,/g, "")) || 0;
   const apyRate = parseFloat(apy) / 100;
   const parsedAmount = parseFloat(usdcAmount) || 0;
   const projectedEarnings = (parsedAmount * apyRate).toFixed(2);
@@ -27,38 +29,53 @@ const DepositForm = ({ walletBalance, currency, apy = "3.63", deal }) => {
 
   const handleSubmit = async () => {
     try {
-      // connect user selected block chain wallet
-      await connect();
-      if (!walletAddress) {
-        toast.error("Please connect your wallet first");
+      if (!isConnected || !address) {
+        toast.error("Connect your wallet first");
         return;
       }
-      const remainingAmount = Number(
-        Number(deal?.overview?.loanAmount) - Number(deal?.poolAmountRaised),
-      ).toFixed(2);
-
-      if (remainingAmount >= 100 && Number(usdcAmount) < 100) {
+      if (!deal?.pubkey && !deal?._id) {
+        toast.error("Pool address missing on this view");
+        return;
+      }
+      if (parsedAmount <= 0) {
+        toast.warning("Enter a positive USDC amount");
+        return;
+      }
+      const remainingAmount =
+        Number(deal?.overview?.loanAmount || 0) - Number(deal?.poolAmountRaised || 0);
+      if (remainingAmount >= 100 && parsedAmount < 100) {
         toast.warning("A minimum of 100 USDC can be deposited");
         return;
       }
+      if (remainingAmount > 0 && remainingAmount < 100 && parsedAmount > remainingAmount) {
+        toast.warning(`You can deposit only ${remainingAmount.toFixed(2)} USDC`);
+        return;
+      }
 
-      if (remainingAmount < 100) {
-        if (Number(usdcAmount) < remainingAmount) {
-          toast.warning(`You can deposit only ${remainingAmount} USDC`);
-          return;
+      setSubmitting(true);
+      // The BE returns { steps: [approve, deposit] } for /lender/build-tx/deposit
+      // — buildAndSendSteps sequentially prompts the wallet for each.
+      const { hashes } = await buildAndSendSteps(
+        address, sendTransactionAsync,
+        "/pool/lender/build-tx/deposit",
+        {
+          pool: deal.pubkey || deal._id,
+          // parsedAmount is a decimal; the BE accepts decimal strings.
+          amount: usdcAmount,
         }
-      }
-
-      // const userActiveAddress = userData?.address;
-      const userActiveAddress = walletAddress;
-
-      const bcType = validateWalletMatch(walletAddress);
-      if (bcType === "Stellar") {
-      }
-      // if (!parsedAmount || parsedAmount <= 0) return;
-      // alert(`Depositing ${parsedAmount} ${currency}`);
+      );
+      toast.success(`Deposited ${parsedAmount} ${currency}. tx: ${hashes[hashes.length - 1].slice(0, 10)}…`);
+      setUsdcAmount("");
     } catch (error) {
       console.log("🚀 ~ handleSubmit ~ error:", error);
+      toast.error(
+        error?.response?.data?.message ||
+        error?.shortMessage ||
+        error?.message ||
+        "Deposit failed"
+      );
+    } finally {
+      setSubmitting(false);
     }
   };
 

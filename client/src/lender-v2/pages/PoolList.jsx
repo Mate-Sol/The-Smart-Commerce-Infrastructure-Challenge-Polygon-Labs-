@@ -4,9 +4,12 @@ import PoolWideCard from "@/dashboard/PoolWideCard";
 import Chip from "../components/ui/Chip";
 import { useNavigate } from "react-router-dom";
 import { getChainIcon } from "@/libs/utils/chainIcons";
-import { axiosInstance } from "@/libs/axios";
 import CustomPagination from "@/components/navigation/CustomPagination";
 import { toast } from "react-toastify";
+// Chunk D2: swap to real BE. axiosInstance was pointed at legacy
+// InvoiceMate endpoints; the payfi_v1 backend exposes GET /pools.
+import { api } from "../../services/evm";
+import { mapPoolToDeal } from "../libs/poolAdapter";
 
 const STATUS_TABS = ["All", "Open", "Active", "Settled"];
 
@@ -35,23 +38,32 @@ const PoolList = () => {
       setPosts([]);
       setPostsLoading(true);
 
-      const response = await axiosInstance.post(
-        `/marketPlaces/getAlldealsnew?sortingOrder=latest&search=&status=${activeTab}&blockChainType=${selectedChain?.label}&page=${page}&limit=${itemsPerPage}&riskType=${activeRisk}`,
-        {
-          id: userData?._id,
-          role: userData?.role ? userData?.role : 2,
-        },
-      );
+      // BE state filter mapping: tab labels → server-recognised state values
+      const stateMap = {
+        Open:    'active',     // payfi_v1 Active = LPs can deposit + PSPs can draw
+        Active:  'active',     // both tabs collapse to active for now
+        Settled: 'closed',
+        All:     null,
+      };
+      const stateQ = stateMap[activeTab];
+      const query = stateQ ? `?state=${stateQ}` : '';
 
-      if (response?.pagination) {
-        setTotalPages(Math.ceil(response?.pagination?.totalPages));
-        setPosts(response?.data || []);
-      } else {
-        setPosts(response || []);
-      }
+      const { data } = await api().get(`/pools${query}`);
+      const deals = (data || []).map(mapPoolToDeal);
+
+      // Risk filter (client-side — payfi_v1 has no server-side tier)
+      const filtered = activeRisk && activeRisk !== 'All'
+        ? deals.filter((d) => d.poolRiskLevel === activeRisk)
+        : deals;
+
+      // Client-side pagination since the BE doesn't paginate /pools yet.
+      const totalPages = Math.max(1, Math.ceil(filtered.length / itemsPerPage));
+      setTotalPages(totalPages);
+      const start = (page - 1) * itemsPerPage;
+      setPosts(filtered.slice(start, start + itemsPerPage));
     } catch (error) {
       console.log("🚀 ~ handleDealList ~ error:", error);
-      toast.error(error?.message);
+      toast.error(error?.response?.data?.message || error?.message || 'Failed to load pools');
     } finally {
       setPostsLoading(false);
     }
@@ -169,7 +181,7 @@ const PoolList = () => {
                   key={pool?.id}
                   // {...pool}
                   deal={pool}
-                  onClick={(dealId) => navigate(`/pool/${dealId}`)}
+                  onClick={(dealId) => navigate(`/lender-v2/pool/${dealId}`)}
                 />
               ))}
             </div>
