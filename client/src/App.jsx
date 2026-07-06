@@ -60,6 +60,27 @@ const OnChainFacilityDetail = lazy(() => import('./pages/onchain-admin/FacilityD
 const OnChainDailyActivity = lazy(() => import('./pages/onchain-admin/DailyActivity'));
 const OnChainAccessCodes = lazy(() => import('./pages/onchain-admin/AccessCodes'));
 
+// ── lender-v2 (defa_v2 drop-in) — mounted at /lender-v2/* ────────────────
+// Preserves the legacy /lender/* pages so we can flip over incrementally.
+// Internal navigations inside these pages still target root-level paths
+// (e.g. navigate('/dashboard')) — that gets rewired in Chunk D when we
+// swap Mock/mock_data.jsx reads for real axios calls to the server.
+const V2LoginPage        = lazy(() => import('./lender-v2/pages/LoginPage'));
+const V2RegisterPage     = lazy(() => import('./lender-v2/pages/RegisterPage'));
+const V2GrantAccessPage  = lazy(() => import('./lender-v2/pages/GrantAccessPage'));
+const V2HomePage         = lazy(() => import('./lender-v2/pages/HomePage'));
+const V2WellcomePage     = lazy(() => import('./lender-v2/pages/WellcomePage'));
+const V2DashboardPage    = lazy(() => import('./lender-v2/pages/DashboardPage'));
+const V2LoanPage         = lazy(() => import('./lender-v2/pages/LoanPage'));
+const V2PoolList         = lazy(() => import('./lender-v2/pages/PoolList'));
+const V2PoolDetails      = lazy(() => import('./lender-v2/pages/PoolDetails'));
+const V2SupportPage      = lazy(() => import('./lender-v2/pages/SupportPage'));
+const V2ReferFriend      = lazy(() => import('./lender-v2/pages/ReferFriend'));
+const V2CaraAgentPage    = lazy(() => import('./lender-v2/pages/CaraAgentPage'));
+const V2AppLayout        = lazy(() =>
+  import('./lender-v2/components/layout/AppLayout').then(m => ({ default: m.AppLayout }))
+);
+
 // Loading component
 const PageLoader = () => (
   <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
@@ -95,6 +116,26 @@ function App() {
             <Route path="/lender/facilities/:pool/daily-activity" element={<LenderDailyActivity />} />
             {/* Legacy route — kept while in-flight links migrate */}
             <Route path="/lender/pools" element={<LenderPools />} />
+
+            {/* ── lender-v2 (defa_v2 drop-in) ────────────────────────────
+                Mounted under /lender-v2/*. Legacy /lender/* routes above
+                remain functional; this block adds the new DeFa multi-chain
+                UI in parallel. Auth wiring + real backend calls land in
+                Chunk B (server retarget) + Chunk D (page-level wire-up). */}
+            <Route path="/lender-v2"                   element={<V2LoginPage />} />
+            <Route path="/lender-v2/register/:otpCode" element={<V2RegisterPage />} />
+            <Route path="/lender-v2/enter-access-code" element={<V2GrantAccessPage />} />
+            <Route path="/lender-v2/sample"            element={<V2HomePage />} />
+            <Route path="/lender-v2/agent-cara"        element={<V2CaraAgentPage />} />
+            <Route element={<V2AppLayout />}>
+              <Route path="/lender-v2/wellcome"         element={<V2WellcomePage />} />
+              <Route path="/lender-v2/dashboard"        element={<V2DashboardPage />} />
+              <Route path="/lender-v2/loans"            element={<V2LoanPage />} />
+              <Route path="/lender-v2/pools"            element={<V2PoolList />} />
+              <Route path="/lender-v2/pool/:dealId"     element={<V2PoolDetails />} />
+              <Route path="/lender-v2/customer-support" element={<V2SupportPage />} />
+              <Route path="/lender-v2/refer"            element={<V2ReferFriend />} />
+            </Route>
 
             {/* Admin pool-init queue — surfaces AWAITING_POOL_INIT facilities */}
             <Route
