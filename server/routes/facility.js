@@ -4,7 +4,11 @@ const router = express.Router();
 const { authMiddleware: auth, authorizeRoles } = require('../middleware/auth');
 const Facility    = require('../models/Facility');
 const PSPProfile  = require('../models/PSPProfile');
-const ps          = require('../services/poolService');
+// EVM swap: on-chain admin's factory.createPool() returns the pool
+// address in the tx receipt. We can no longer pre-derive it from PSP wallet
+// + facility id (that was Solana PDA behaviour). The poolPda / vaultPda /
+// lpMintPda fields on Facility stay null until Onchain admin actually
+// deploys the pool and the evmIndexer picks up the PoolCreated event.
 
 // Authorized state transitions per role.
 const NEXT_AFTER = {
@@ -205,14 +209,12 @@ router.post('/facility/:id/approve', auth, authorizeRoles('KAM','CAD','CRO'), as
       f.approvedTerms = finalTerms;
       f.approvals.cro = { ...stamp, termAdjustments: overrides };
       f.croApprovedAt = new Date();
-
-      // Pre-derive PDAs so the on-chain admin can sign immediately.
-      const [poolPda]   = ps.derivePool(f.pspWallet, f.facilityId);
-      const [vaultPda]  = ps.deriveVault(poolPda);
-      const [lpMintPda] = ps.deriveLpMint(poolPda);
-      f.poolPda   = poolPda.toBase58();
-      f.vaultPda  = vaultPda.toBase58();
-      f.lpMintPda = lpMintPda.toBase58();
+      // EVM: pool address is unknown until factory.createPool() runs at
+      // the onchain-admin step. Leave the *Pda fields null; the evmIndexer
+      // will set them when it observes the PoolCreated event.
+      f.poolPda   = '';
+      f.vaultPda  = '';
+      f.lpMintPda = '';
     }
 
     f.status = next;

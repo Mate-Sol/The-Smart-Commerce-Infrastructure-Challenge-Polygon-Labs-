@@ -1,0 +1,92 @@
+# DeFa — Polygon Amoy stack. One-VM deployment.
+#
+# Services:
+#   mongo         Mongo 7 with persistent volume (defa-polygon-amoy DB)
+#   server        Node backend on port 5050 — served internally
+#   client        Vite v2 lender UI (nginx :80) — the DeFa demo surface
+#   legacy        Vite Colosseum client (nginx :80) — the PSP + admin portal
+#
+# All 4 containers on a private compose network. Nginx on the HOST reverse-
+# proxies to them (see deployment.md for the host nginx snippet + DNS).
+#
+# Usage on the VM:
+#   1. Clone this repo.
+#   2. cp .env.production.example .env.production  (or write .env manually)
+#      Fill in every value.
+#   3. docker compose up -d --build
+#   4. Follow deployment.md to wire host nginx + Let's Encrypt.
+#
+# To wipe state: docker compose down -v
+
+services:
+  mongo:
+    image: mongo:7
+    container_name: defa-polygon-mongo
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: defa-polygon-server
+    restart: unless-stopped
+    env_file:
+      - ./server/.env.production
+    environment:
+      # Inside compose, mongo is reachable by service name.
+      MONGODB_URI: mongodb://mongo:27017/defa-polygon-amoy
+      PORT: 5050
+    depends_on:
+      mongo:
+        condition: service_healthy
+    ports:
+      - "5050:5050"
+
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL}
+        VITE_CHAIN_ID: ${VITE_CHAIN_ID}
+        VITE_CHAIN_NAME: ${VITE_CHAIN_NAME}
+        VITE_CHAIN_NATIVE_SYMBOL: ${VITE_CHAIN_NATIVE_SYMBOL}
+        VITE_CHAIN_NATIVE_DECIMALS: ${VITE_CHAIN_NATIVE_DECIMALS}
+        VITE_RPC_URL: ${VITE_RPC_URL}
+        VITE_CHAIN_EXPLORER_URL: ${VITE_CHAIN_EXPLORER_URL}
+        VITE_STABLECOIN_ADDRESS: ${VITE_STABLECOIN_ADDRESS}
+        VITE_TREASURY_ADDRESS: ${VITE_TREASURY_ADDRESS}
+        VITE_FACTORY_ADDRESS: ${VITE_FACTORY_ADDRESS}
+        VITE_WALLETCONNECT_PROJECT_ID: ${VITE_WALLETCONNECT_PROJECT_ID}
+    container_name: defa-polygon-client
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+
+  legacy:
+    build:
+      context: ./client-legacy
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL}
+        VITE_CHAIN_ID: ${VITE_CHAIN_ID}
+        VITE_CHAIN_NAME: ${VITE_CHAIN_NAME}
+        VITE_CHAIN_NATIVE_SYMBOL: ${VITE_CHAIN_NATIVE_SYMBOL}
+        VITE_RPC_URL: ${VITE_RPC_URL}
+        VITE_STABLECOIN_ADDRESS: ${VITE_STABLECOIN_ADDRESS}
+        VITE_FACTORY_ADDRESS: ${VITE_FACTORY_ADDRESS}
+        VITE_WALLETCONNECT_PROJECT_ID: ${VITE_WALLETCONNECT_PROJECT_ID}
+    container_name: defa-polygon-legacy
+    restart: unless-stopped
+    ports:
+      - "8081:80"
+
+volumes:
+  mongo_data:

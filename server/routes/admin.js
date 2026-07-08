@@ -12,7 +12,7 @@ const { uploadBase64Attachment } = require('../fileUpload');
 // Apply authentication to all admin routes
 router.use(authMiddleware);
 // Generic admin check for initial route access
-router.use(authorizeRoles('KAM', 'CAD', 'CRO', 'CFO', 'VIEW_ONLY_ADMIN', 'LEGAL_ADMIN'));
+router.use(authorizeRoles('KAM', 'CAD', 'CRO', 'CFO', 'VIEW_ONLY_ADMIN', 'LEGAL_ADMIN', 'ONCHAIN_ADMIN'));
 
 // --- SHARED ROUTES (All Admins) ---
 

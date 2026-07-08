@@ -66,6 +66,35 @@ const erc20Interface  = new ethers.Interface(ERC20Abi);
  * The indexer worker calls this every 15s per pool. Batched via
  * Promise.all so a single provider RPC call under the hood.
  */
+// Retry helper — transient RPC errors on public testnet RPCs are common.
+// Retries on:
+//   - 429 / 500 / timeout / rate limits (standard HTTP-level throttling)
+//   - CALL_EXCEPTION with missing revert data — Arc's public RPC pattern
+//     when overloaded; the RPC returns a bogus revert instead of 429.
+//   - "could not coalesce" — ethers.js signal of RPC batch failure.
+// Exponential backoff: 500ms, 1s, 2s.
+async function _withRetry(fn, retries = 3) {
+  let lastErr;
+  for (let i = 0; i <= retries; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      lastErr = e;
+      const msg = String(e?.message || '');
+      const code = e?.code || '';
+      const transient =
+        /429|500|timeout|rate|coalesce|ECONNRESET|missing revert data/i.test(msg) ||
+        code === 'CALL_EXCEPTION';
+      if (transient && i < retries) {
+        await new Promise((r) => setTimeout(r, 500 * (2 ** i)));
+        continue;
+      }
+      throw e;
+    }
+  }
+  throw lastErr;
+}
+
 async function readPoolState(poolAddress) {
   const pool = getPool(poolAddress);
   const [
@@ -75,7 +104,7 @@ async function readPoolState(poolAddress) {
     fundingStartTs, fMaturityTs, poolStartTs, poolFinalityTs,
     principal, availableToDd, outstanding, fundingCredit, yieldOwed, dollarSeconds,
     isDrawdownAllowed, currentDay,
-  ] = await Promise.all([
+  ] = await _withRetry(() => Promise.all([
     pool.status(), pool.pspWallet(), pool.stablecoin(), pool.factory(),
     pool.softCap(), pool.hardCap(), pool.tenure(), pool.aprAnnual(),
     pool.idleRateDaily(), pool.utilizedRateDaily(), pool.penaltyRateDaily(),
@@ -84,7 +113,7 @@ async function readPoolState(poolAddress) {
     pool.principal(), pool.availableToDd(), pool.outstanding(),
     pool.fundingCredit(), pool.yieldOwed(), pool.dollarSeconds(),
     pool.isDrawdownAllowed(), pool.currentDay(),
-  ]);
+  ]));
 
   return {
     poolAddress,

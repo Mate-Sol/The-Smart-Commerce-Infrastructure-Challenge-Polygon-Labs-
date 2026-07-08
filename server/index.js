@@ -110,6 +110,19 @@ app.use('/support', require('./routes/support'));
 app.use('/observer', require('./routes/observer'));
 app.use('/admin', require('./routes/lifecycle'));
 app.use('/faucet', require('./routes/faucet'));
+// Pool transactions: /pools, /pool/:pool/*, /lender/build-tx/*,
+// /lender/portfolio, /psp/exec/drawdown, /psp/build-tx/*,
+// /admin/build-tx/*, /admin/exec/*. Mounted at root because poolTx.js
+// declares its own path prefixes.
+app.use('/', require('./routes/poolTx'));
+app.use('/access-code', require('./routes/accessCode'));
+// Legacy v2 auth shim — POST /users/{login-user,apply-referral,create-user}.
+// Serves defa_v2_mainnet's URL contract so the restored v2 UI works
+// unmodified. Backed by Lender + AccessCode models.
+app.use('/users', require('./routes/legacyAuth'));
+// Legacy v2 marketplaces shim — POST /marketPlaces/getAlldealsnew and
+// GET /marketPlaces/getDealsById/:id. Backed by our EVM pool state.
+app.use('/marketPlaces', require('./routes/legacyMarketPlaces'));
 app.use('/relay', require('./routes/relay'));
 app.use('/pool', require('./routes/poolTx'));
 app.use('/', require('./routes/facility'));

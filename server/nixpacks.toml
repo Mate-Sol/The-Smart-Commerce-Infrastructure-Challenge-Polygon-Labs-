@@ -1,12 +1,14 @@
-# Railway / Nixpacks build config for the DeFa backend.
-# Railway auto-detects Node + `npm start` from package.json, so this file is
-# mostly to pin the Node version and document the build/start commands.
+# Railway/Nixpacks build hints for the Node backend.
 
 [phases.setup]
 nixPkgs = ["nodejs_20"]
 
 [phases.install]
-cmds = ["npm ci --omit=dev || npm install --omit=dev"]
+cmds = ["npm ci --no-fund --no-audit"]
+
+[phases.build]
+# Nothing to build — plain Node
+cmds = []
 
 [start]
-cmd = "npm start"
+cmd = "node index.js"

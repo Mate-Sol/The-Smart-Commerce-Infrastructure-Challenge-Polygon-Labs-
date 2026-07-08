@@ -81,8 +81,8 @@ const wadToBps = (wad) => Number((BigInt(wad || 0) * 10_000n) / 10n ** 18n);
 
 async function labelFor(poolAddress, fallback) {
   try {
-    const override = await PoolNameOverride.findOne({ pubkey: poolAddress }).lean();
-    if (override?.name) return override.name;
+    const override = await PoolNameOverride.findOne({ poolPda: poolAddress }).lean();
+    if (override?.displayName) return override.displayName;
   } catch { /* schema not present on fresh install — ignore */ }
   return fallback || `Pool ${poolAddress.slice(0, 6)}…${poolAddress.slice(-4)}`;
 }
@@ -199,10 +199,12 @@ router.post('/lender/build-tx/deposit', authMiddleware, async (req, res) => {
 
     const approve = svc.encodeApprove(pool, amount);
     const deposit = svc.encodeDeposit(pool, amount);
+    // BigInt values inside step tuples must be stringified for JSON.
+    const jsonTx = (t) => ({ to: t.to, data: t.data, value: t.value.toString() });
     res.json({
       steps: [
-        { label: 'Approve USDC',    tx: approve },
-        { label: 'Deposit to pool', tx: deposit },
+        { label: 'Approve USDC',    tx: jsonTx(approve) },
+        { label: 'Deposit to pool', tx: jsonTx(deposit) },
       ],
       to: deposit.to, data: deposit.data, value: deposit.value.toString(),
     });
@@ -229,10 +231,11 @@ router.post('/lender/build-tx/redeem', authMiddleware, async (req, res) => {
 
     const claimYield     = svc.encodeClaimYield(pool);
     const claimPrincipal = svc.encodeClaimPrincipal(pool);
+    const jsonTx = (t) => ({ to: t.to, data: t.data, value: t.value.toString() });
     res.json({
       steps: [
-        { label: 'Claim yield',     tx: claimYield },
-        { label: 'Claim principal', tx: claimPrincipal },
+        { label: 'Claim yield',     tx: jsonTx(claimYield) },
+        { label: 'Claim principal', tx: jsonTx(claimPrincipal) },
       ],
       to: claimPrincipal.to, data: claimPrincipal.data, value: claimPrincipal.value.toString(),
     });

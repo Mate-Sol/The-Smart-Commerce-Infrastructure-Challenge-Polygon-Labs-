@@ -1,20 +1,34 @@
 const mongoose = require('mongoose');
 
 /**
- * Lender — wallet-only identity. No email, no password. Created lazily on
- * first successful wallet-signature login. Holds optional metadata that
- * the lender can add later from their portal.
+ * Lender identity.
  *
- * Lenders are distinct from `User` (which holds email-based PSP/admin
- * accounts). They never authenticate via the email/password flow.
+ * The v2 flow (defa_v2_mainnet, what prod runs) uses email + password for
+ * lender login and OTP access codes for signup. Wallet is bound later
+ * for on-chain deposit/redeem. So both auth surfaces are supported:
+ *
+ *   Email + password             — v2 login flow (/users/login-user)
+ *   Wallet-only SIWE (legacy)    — original Colosseum lender flow
+ *
+ * `wallet` is optional to allow email-only signup + late wallet binding.
+ * Unique+sparse index means multiple lenders can have no wallet, but the
+ * first to bind an address locks it in.
  */
 const LenderSchema = new mongoose.Schema(
   {
-    wallet: { type: String, required: true, unique: true, index: true },
-    displayName: { type: String, default: '' },
-    contactEmail: { type: String, default: '' }, // optional, opt-in for close-out notifications
-    lastLoginAt: { type: Date, default: null },
-    loginCount: { type: Number, default: 0 },
+    email:         { type: String, unique: true, sparse: true, index: true, lowercase: true, trim: true },
+    passwordHash:  { type: String, default: '' },  // bcrypt hash — set for v2 email/password lenders
+    userName:      { type: String, default: '' },  // display handle from /users/create-user
+    displayName:   { type: String, default: '' },
+    contactEmail:  { type: String, default: '' },  // opt-in notifications; usually mirrors `email`
+
+    wallet:        { type: String, unique: true, sparse: true, index: true },
+    // Original SIWE lenders that started as wallet-only kept their entry
+    // shape (no email + no password). New v2 signups always have all fields.
+
+    lastLoginAt:   { type: Date, default: null },
+    loginCount:    { type: Number, default: 0 },
+    referredByCode:{ type: String, default: '' },  // the AccessCode value that unlocked this account
   },
   { timestamps: true }
 );
