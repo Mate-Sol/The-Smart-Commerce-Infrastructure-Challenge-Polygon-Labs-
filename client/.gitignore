@@ -22,14 +22,3 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-
-# Environment variables
-
-
-# GitHub workflows / configs
-.github/
-
-!.env.example
-.github/
-.env
-.env.local
