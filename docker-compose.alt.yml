@@ -48,6 +48,12 @@ services:
         condition: service_healthy
     ports:
       - "5050:5050"
+    # User-uploaded KYC docs / credit memos land here via the local-fs
+    # fallback in server/fileUpload.js. Volume keeps them alive across
+    # container restarts. Not needed if Azure Blob is configured
+    # (connectionString env var) — then uploads route to Azure directly.
+    volumes:
+      - server_uploads:/app/public/paymate-files
 
   client:
     build:
@@ -90,3 +96,4 @@ services:
 
 volumes:
   mongo_data:
+  server_uploads:
