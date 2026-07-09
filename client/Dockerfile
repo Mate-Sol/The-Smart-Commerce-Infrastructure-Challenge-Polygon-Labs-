@@ -36,6 +36,10 @@ ENV VITE_TREASURY_ADDRESS=${VITE_TREASURY_ADDRESS}
 ENV VITE_FACTORY_ADDRESS=${VITE_FACTORY_ADDRESS}
 ENV VITE_WALLETCONNECT_PROJECT_ID=${VITE_WALLETCONNECT_PROJECT_ID}
 
+# Heavy dep tree + large bundle can exhaust Node's default heap during the
+# Vite build on CI runners -> exit 137 / "heap out of memory". Raise the limit.
+ENV NODE_OPTIONS=--max-old-space-size=4096
+
 RUN npm run build
 
 # ── nginx stage ──────────────────────────────────────────────
@@ -43,9 +47,9 @@ FROM nginx:1.27-alpine
 COPY --from=build /app/dist /usr/share/nginx/html
 
 # SPA fallback — every unknown route serves index.html so react-router
-# picks it up.
+# picks it up. Listen on 8081 to match the ploygon-ui Service targetPort.
 RUN echo 'server { \
-  listen 80; \
+  listen 8081; \
   server_name _; \
   root /usr/share/nginx/html; \
   index index.html; \
@@ -55,5 +59,5 @@ RUN echo 'server { \
   } \
 }' > /etc/nginx/conf.d/default.conf
 
-EXPOSE 80
+EXPOSE 8081
 CMD ["nginx", "-g", "daemon off;"]
