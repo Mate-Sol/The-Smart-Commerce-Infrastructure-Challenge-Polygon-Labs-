@@ -1,0 +1,200 @@
+# =====================================================================
+#  Name: Ploygon-Hackathon-CICD
+#  Description: Build Docker images for the 3 Ploygon services (admin, ui,
+#               backend), run security scans, and deploy to Google
+#               Kubernetes Engine (GKE) in the ploygon-hackathon namespace
+#  Trigger: On push to 'main' branch or manual workflow dispatch
+# =====================================================================
+
+name: Ploygon-Hackathon-CICD
+
+permissions:
+  contents: read
+  id-token: write
+  packages: write
+  attestations: write
+  security-events: write
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+env:
+  REGISTRY: docker.io
+  GKE_CLUSTER: im-prod
+  GKE_ZONE: us-central1
+  NAMESPACE: ploygon-hackathon
+  CI: false
+
+jobs:
+  # 🔑 1️⃣ Secret Scanning
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run GitLeaks
+        uses: zricethezav/gitleaks-action@v2
+        with:
+          config-path: gitleaks.toml
+        env:
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+
+  # 📦 2️⃣ Dependency + IaC Scan
+  dependency-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Trivy Filesystem Scan
+        uses: aquasecurity/trivy-action@v0.20.0
+        with:
+          scan-type: fs
+          severity: CRITICAL,HIGH
+          exit-code: 0
+          ignore-unfixed: true
+
+      - name: Generate SBOM (CycloneDX)
+        uses: aquasecurity/trivy-action@v0.20.0
+        with:
+          scan-type: fs
+          format: cyclonedx
+          output: sbom.json
+
+      - name: Upload SBOM Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.json
+
+  # 🐳 3️⃣ Build & Push Docker Images (one per service)
+  build:
+    runs-on: ubuntu-latest
+    needs: [secret-scan, dependency-scan]
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: matesol/ploygon-be
+            context: ./server
+          - image: matesol/ploygon-ui
+            context: ./client
+          - image: matesol/ploygon-admin
+            context: ./client-legacy
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: |
+          echo "Before cleanup:"
+          df -h
+
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/powershell
+          sudo rm -rf /opt/hostedtoolcache/*
+
+          echo "After cleanup:"
+          df -h
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_UNAME }}
+          password: ${{ secrets.DOCKER_PASS }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ matrix.image }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.context }}/Dockerfile
+          push: true
+          no-cache: true
+          tags: ${{ matrix.image }}:main
+          labels: ${{ steps.meta.outputs.labels }}
+
+  # 🔍 4️⃣ Scan Built Docker Images
+  security-scan:
+    runs-on: ubuntu-latest
+    needs: build
+
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - matesol/ploygon-be
+          - matesol/ploygon-ui
+          - matesol/ploygon-admin
+
+    steps:
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_UNAME }}
+          password: ${{ secrets.DOCKER_PASS }}
+
+      - name: Pull Image
+        run: docker pull ${{ matrix.image }}:main
+
+      - name: Scan Docker Image with Trivy
+        uses: aquasecurity/trivy-action@v0.20.0
+        with:
+          image-ref: ${{ matrix.image }}:main
+          severity: CRITICAL,HIGH
+          exit-code: 0
+          ignore-unfixed: true
+          scanners: vuln
+
+  # 🧾 5️⃣ Generate Provenance (SLSA)
+  # provenance:
+  #   runs-on: ubuntu-latest
+  #   needs: build
+  #   steps:
+  #     - uses: slsa-framework/slsa-github-generator@v2.0.0
+
+  # 🚀 6️⃣ Deploy to Google Kubernetes Engine (GKE)
+  deploy:
+    name: Deploy to GKE
+    runs-on: ubuntu-latest
+    needs: security-scan
+
+    strategy:
+      fail-fast: false
+      matrix:
+        deployment:
+          - ploygon-be
+          - ploygon-ui
+          - ploygon-admin
+
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: "${{ secrets.GKE_BETA_CREDS }}"
+
+      - name: Set up GKE credentials
+        uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: ${{ env.GKE_CLUSTER }}
+          location: ${{ env.GKE_ZONE }}
+
+      - name: Verify GKE cluster connection
+        run: kubectl get nodes
+
+      - name: Restart GKE deployment
+        run: kubectl rollout restart deployment/${{ matrix.deployment }} --namespace ${{ env.NAMESPACE }}
+
+      - name: Check rollout status
+        run: kubectl rollout status deployment/${{ matrix.deployment }} --namespace ${{ env.NAMESPACE }} --timeout=180s
