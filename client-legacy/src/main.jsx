@@ -1,6 +1,5 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { Provider as ReduxProvider } from 'react-redux'
 import './index.css'
 import App from './App.jsx'
 // Legacy Solana wallet stack — still wraps the tree so existing PSP /
@@ -9,12 +8,8 @@ import App from './App.jsx'
 // Removed once every page is on wagmi.
 import SolanaWalletProvider from './context/SolanaWalletProvider.jsx'
 // New EVM wallet stack — wagmi + RainbowKit + @tanstack/react-query.
-// Every new page (lender-v2 and the retargeted PSP/admin flows) uses this.
+// Every retargeted PSP/admin/onchain-admin page uses this.
 import EvmWalletProvider from './context/EvmWalletProvider.jsx'
-// Redux store lives inside the defa_v2 lender-v2 drop-in. Both the legacy
-// portals (which don't need Redux) and the new lender-v2 pages (which do)
-// wrap under the same Provider so useSelector/useDispatch resolve everywhere.
-import { store } from './lender-v2/store/store.js'
 
 // Sentry — only initialised when VITE_SENTRY_DSN is set so dev builds
 // stay quiet. Browser tracer + replay are skipped to keep the bundle
@@ -37,12 +32,10 @@ if (typeof window !== 'undefined' && !window.Buffer) window.Buffer = Buffer
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <ReduxProvider store={store}>
-      <EvmWalletProvider>
-        <SolanaWalletProvider>
-          <App />
-        </SolanaWalletProvider>
-      </EvmWalletProvider>
-    </ReduxProvider>
+    <EvmWalletProvider>
+      <SolanaWalletProvider>
+        <App />
+      </SolanaWalletProvider>
+    </EvmWalletProvider>
   </StrictMode>,
 )
