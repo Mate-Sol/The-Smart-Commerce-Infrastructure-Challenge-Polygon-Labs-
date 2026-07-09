@@ -1,163 +1,190 @@
-# Architecture
+# DeFa — System Architecture
 
-DeFa is three components glued by JWT and signed Solana transactions:
+*Ignyte Smart Commerce Infrastructure Challenge submission — deployed on Polygon Amoy testnet.*
 
-```
-                      ┌────────────────────────────────────────┐
-                      │             SOLANA DEVNET              │
-                      │   paymate-pool-v2 (Anchor program)     │
-                      │                                        │
-                      │   Pool PDA   ◄── (psp_wallet, fac_id)  │
-                      │   Drawdown PDA                          │
-                      │   Vault (SPL ATA owned by Pool)         │
-                      │   LP Mint                               │
-                      └─▲───────────▲─────────────▲─────────────┘
-                        │           │             │
-                        │ signs     │ signs       │ events + state
-                        │           │             │
-        ┌───────────────┴┐    ┌─────┴──────┐  ┌───┴────────────────────┐
-        │ Lender wallet  │    │ PSP wallet │  │ server/  (Express+Mongo)│
-        │ (Phantom/Bp.)  │    │ (Phantom)  │  │                         │
-        └───────┬────────┘    └─────┬──────┘  │ · Anchor client builds  │
-                │                   │         │   tx → user signs →     │
-                │ JWT (lender)      │ JWT     │   /relay/submit adds    │
-                │ via SIWS          │ (PSP)   │   feePayer sig          │
-                │                   │         │ · solanaIndexer mirrors │
-                ▼                   ▼         │   PoolState/DrawdownState
-        ┌───────────────────────────────────┐ │ · /facility/* approval  │
-        │       client/ (Vite + React)      │ │   workflow              │
-        │                                   │ │ · /access-code/*        │
-        │  Public  : /  /apply-access /login│ │ · /pool/* build-tx +    │
-        │  Lender  : /lender/*              │◄┤   read endpoints        │
-        │  PSP     : /psp /psp/borrow/*     │ │                         │
-        │  Admin   : /admin/* (KAM/CAD/CRO/ │ └─────────────────────────┘
-        │            CFO/Legal/SuperAdmin)  │
-        │  OnChain : /onchain-admin/*       │
-        └───────────────────────────────────┘
-```
+DeFa is on-chain credit operating infrastructure for SME trade finance. LPs deposit stablecoins, PSPs / SMEs draw against verified receivables, KAM → CAD → CRO → Legal approvals gate every facility, on-chain admin signs pool deployment. Automated repayment waterfalls, tiered risk pools, and cleaner on-chain accounting than legacy trade-credit rails.
 
----
+## Top-level architecture
 
-## Identity model
+```mermaid
+graph TB
+  subgraph browser["👥 USER-FACING PORTALS"]
+    lender[🔵 Lender UI<br/>defa_v2 React + wagmi<br/>Vercel]
+    psp_admin[🟠 PSP + Admin UI<br/>Colosseum client + wagmi<br/>Vercel]
+    wallet["🦊 MetaMask / RainbowKit<br/>signs SIWE + txs"]
+    lender -.wallet.-> wallet
+    psp_admin -.wallet.-> wallet
+  end
 
-Three identities live side by side:
+  subgraph backend["⚙️ BACKEND"]
+    api["📡 Node/Express API<br/>Railway"]
+    mongo[("💾 MongoDB<br/>Users • PSPProfiles • Facilities<br/>AccessCodes • PoolState")]
+    indexer["🔄 EVM Event Indexer<br/>polls PoolCreated, Deposit,<br/>DrawdownExecuted, Repaid"]
+    api --> mongo
+    indexer --> mongo
+  end
 
-| Identity | Storage | Issued by | Auth field |
-|---|---|---|---|
-| **PSP user** | sessionStorage | `/auth/login` (email + password) | `kind: 'user'` JWT, `role: 'PSP'` |
-| **Admin user** | sessionStorage | `/auth/login` | `kind: 'user'` JWT, `role: 'KAM'/'CAD'/'CRO'/'CFO'/'LEGAL_ADMIN'/'SUPER_ADMIN'` |
-| **Lender** | localStorage | `/auth/wallet/login` (SIWS) **or** `/access-code/redeem` | `kind: 'lender'` JWT, `lenderId`, `wallet` |
-| **On-chain admin** | sessionStorage | `/auth/wallet/onchain-admin/login` (wallet must be in `ONCHAIN_ADMIN_WALLETS` env) | `kind: 'user'` JWT, `role: 'ONCHAIN_ADMIN'` (auto-created shadow User) |
+  subgraph onchain["⛓️ POLYGON AMOY (chain 80002)"]
+    factory["🏭 PoolFactory<br/>EIP-1167 clones<br/>PSP registry + envelope"]
+    pool["💧 PoolContract (per-facility)<br/>deposit • drawdown • repay<br/>yield claim • default handling"]
+    treasury["🏦 TreasuryReserve<br/>protocol fees • insurance reserve"]
+    usdc["💵 USDC/MockUSD<br/>6-decimal stablecoin rail"]
+    factory -.clones.-> pool
+    pool -.settles in.-> usdc
+    pool -.protocol split.-> treasury
+  end
 
-`services/solana.js` `getToken()` picks storage based on URL path so a stale token from one portal never shadows another.
+  lender --> api
+  psp_admin --> api
+  api -->|reads state| pool
+  api -->|reads state| factory
+  api -->|reads state| treasury
+  wallet -->|signs writes| factory
+  wallet -->|signs writes| pool
+  indexer -->|polls events| factory
+  indexer -->|polls events| pool
 
----
-
-## Sequence: PSP first facility lifecycle
-
-```
-PSP                   Admin queue           CRO              On-chain admin     Lender(s)        Solana program
- │                      │                    │                     │                │                │
- │ /apply-limit, KYC … (existing onboarding flow)                  │                │                │
- │ ───────────────────► │  KAM → CAD → CRO → Legal → FINALIZED     │                │                │
- │                      │                    │                     │                │                │
- │ /facility/request    │                    │                     │                │                │
- │ {creditLine, tenor,  │                    │                     │                │                │
- │  rates, secondsPerDay│                    │                     │                │                │
- │  ?}                  │                    │                     │                │                │
- │                      │ Facility KAM_REVIEW│                     │                │                │
- │                      │                    │ /facility/:id/      │                │                │
- │                      │                    │  approve            │                │                │
- │                      │                    │ (terms editable)    │                │                │
- │                      │                    │ → AWAITING_POOL_INIT│                │                │
- │                      │                    │                     │ initialize_pool│                │
- │                      │                    │                     │ (admin signs)  │ ──────────────►│ Pool PDA created
- │                      │                    │                     │                │                │
- │                      │                    │                     │                │ deposit USDC   │
- │                      │                    │                     │                │ ──────────────►│ Vault filled, LP minted
- │                      │                    │                     │ execute_       │                │
- │                      │                    │                     │  facility      │ ──────────────►│ Active
- │                      │                    │                     │                │                │
- │ /quick-request-      │                    │                     │                │                │
- │  financing           │                    │                     │                │                │
- │ → AwaitingDrawdown   │                    │                     │                │                │
- │                      │                    │                     │                │                │
- │ request_drawdown     │                    │                     │                │                │
- │ (PSP signs)          │ ──────────────────────────────────────────────────────────────────────────►│ Drawdown PDA, USDC out
- │                      │                    │                     │                │                │
- │ … days later …       │                    │                     │                │                │
- │ repay (PSP signs)    │ ──────────────────────────────────────────────────────────────────────────►│ Principal + util + penalty
- │                      │                    │                     │                │                │
- │ settle_commit_fee    │ ──────────────────────────────────────────────────────────────────────────►│ Pool commit fee → 0
- │                      │                    │                     │                │                │
- │                      │                    │                     │                │ redeem_lp      │
- │                      │                    │                     │                │ ──────────────►│ Pro-rata USDC out
+  classDef userBox fill:#d4e6ff,stroke:#0066cc,color:#000
+  classDef beBox fill:#fff4d4,stroke:#b8860b,color:#000
+  classDef chainBox fill:#e0f0e0,stroke:#2d7d2d,color:#000
+  class lender,psp_admin,wallet userBox
+  class api,mongo,indexer beBox
+  class factory,pool,treasury,usdc chainBox
 ```
 
-Subsequent facilities skip KAM + CAD and go straight to CRO.
+## Facility lifecycle (KAM → CAD → CRO → Legal → On-chain Admin)
 
----
+```mermaid
+sequenceDiagram
+  autonumber
+  actor PSP as PSP
+  actor KAM as KAM
+  actor CAD as CAD
+  actor CRO as CRO
+  actor OCA as On-chain Admin
+  actor LP as Lender
+  participant BE as Backend API
+  participant DB as MongoDB
+  participant CH as Polygon Amoy
 
-## Lender access codes
+  PSP->>BE: POST /psp/apply-limit (KYB submit)
+  BE->>DB: PSPProfile.workflowStep = FINALIZED
+  PSP->>BE: POST /facility/request (terms)
+  BE->>DB: Facility.status = KAM_REVIEW
+
+  KAM->>BE: POST /facility/:id/approve
+  BE->>DB: → CAD_REVIEW
+  CAD->>BE: POST /facility/:id/approve
+  BE->>DB: → CRO_REVIEW
+  CRO->>BE: POST /facility/:id/approve (+ term overrides)
+  BE->>DB: → AWAITING_POOL_INIT
+
+  OCA->>BE: POST /admin/build-tx/approve-psp<br/>POST /admin/build-tx/initialize-pool
+  BE-->>OCA: calldata (approve-psp, createPool)
+  OCA->>CH: signs approvePsp + createPool
+  CH-->>CH: emits PoolCreated event
+
+  BE->>CH: evmIndexer polls (90s)
+  BE->>DB: Facility.poolPda = <new pool>
+  BE->>DB: mirror PoolState
+
+  LP->>BE: POST /pool/lender/build-tx/deposit
+  BE-->>LP: steps: [approve, deposit]
+  LP->>CH: signs approve + deposit
+  CH-->>LP: LP receives pro-rata pool share
+
+  PSP->>BE: POST /psp/exec/drawdown
+  BE->>CH: server signs AGENT2 executeDrawdown
+  CH-->>PSP: USDC to authorized receiver
+
+  PSP->>BE: POST /psp/build-tx/repay
+  BE-->>PSP: calldata
+  PSP->>CH: signs repay (principal + util fee + penalty)
+
+  LP->>BE: POST /pool/lender/build-tx/redeem
+  BE-->>LP: steps: [claimYield, claimPrincipal]
+  LP->>CH: signs both → receives principal + yield
+```
+
+## Contract set (payfi_v1)
+
+```mermaid
+classDiagram
+  class PoolFactory {
+    +approvePsp(address)
+    +revokePsp(address)
+    +createPool(params)
+    +setEnvelope(bounds)
+    +psps mapping
+    +poolCount, poolImplementation
+  }
+
+  class PoolContract {
+    +initialize(params)
+    +deposit(uint256)
+    +withdraw(uint256)
+    +finalizeFunding()
+    +executeDrawdown(ref, receiver, amt, days)
+    +repay(bytes32 ref)
+    +payAccruedIdleFees(amount)
+    +claimYield()
+    +claimPrincipal()
+    +declareDefault()
+    +sweepProtocolFees()
+    -status enum
+    -drawDowns mapping
+    -lpPositions mapping
+  }
+
+  class TreasuryReserve {
+    +drawReserve(uint256)
+    +topUp(uint256)
+    +depositImFees(uint256)
+    +setFactory(address)
+  }
+
+  class MockStablecoin {
+    <<ERC-20, 6 decimals>>
+    +mint(to, amount)
+    +transfer / approve / balanceOf
+  }
+
+  PoolFactory "1" *-- "many" PoolContract : clones
+  PoolContract --> TreasuryReserve : protocol fees split
+  PoolContract --> MockStablecoin : settlement asset
+  PoolFactory --> MockStablecoin : reference for pools
+```
+
+## Deployed on Polygon Amoy (chain 80002)
+
+| Contract | Address | Explorer |
+|---|---|---|
+| **PoolFactory** | `0xE02D8d3B14746E42c5D41a2CA805798D5A6E0F78` | [amoy.polygonscan.com](https://amoy.polygonscan.com/address/0xE02D8d3B14746E42c5D41a2CA805798D5A6E0F78) |
+| **MockUSD** | `0x4e39880B43f9a83586a2aC75a01dff779Eb958c0` | [amoy.polygonscan.com](https://amoy.polygonscan.com/address/0x4e39880B43f9a83586a2aC75a01dff779Eb958c0) |
+| **TreasuryReserve** | `0x03D21aFF05a94E2B87d1F55b2deE8F6f3fd9D9f8` | [amoy.polygonscan.com](https://amoy.polygonscan.com/address/0x03D21aFF05a94E2B87d1F55b2deE8F6f3fd9D9f8) |
+
+**3 demo facilities live on-chain**: Mercury Settlements USDC Facility (12% APR, Medium risk), Aurum Cross-Border Corridor (6% APR, Low risk), Meridian FX Working Capital (14% APR, Medium risk).
+
+## Repo structure
 
 ```
-On-chain admin                   Server                        Prospective lender
-      │                            │                                    │
-      │ POST /access-code/create   │                                    │
-      │ {count, label}             │                                    │
-      │ ─────────────────────────► │                                    │
-      │ ◄────────── codes[]        │                                    │
-      │                            │                                    │
-      │ shares code out-of-band ──►│                                    │
-      │                            │                                    │
-      │                            │ POST /access-code/check {code}     │
-      │                            │ ◄───────────────────────────────── │
-      │                            │ {valid: true} ───────────────────► │
-      │                            │                                    │
-      │                            │ POST /access-code/redeem           │
-      │                            │ {code, name, email, wallet,        │
-      │                            │  nonce, signature}                 │
-      │                            │ ◄───────────────────────────────── │
-      │                            │ atomic: claim code → upsert Lender │
-      │                            │  → issue lender JWT                │
-      │                            │ {token, lender} ─────────────────► │
-      │                            │                                    │
-      │                            │ subsequent visits                  │
-      │                            │ POST /auth/wallet/login            │
-      │                            │ ◄───────────────────────────────── │
-      │                            │ (no code needed; wallet bound)     │
+├── client/           v2 lender UI  (React 19 + Vite + Tailwind v4 + wagmi + RainbowKit)
+├── client-legacy/    PSP + admin portals (KAM/CAD/CRO/Legal/onchain-admin)
+├── server/           Node/Express + Mongoose + ethers v6
+│   ├── routes/       18 route files — auth, facility, poolTx, admin, faucet, etc.
+│   ├── services/     poolServiceEvm (ethers client), walletAuthEvm (SIWE)
+│   ├── workers/      evmIndexer (polls PoolCreated + DrawdownExecuted + Repaid)
+│   └── test/         38-test suite (e2eFlows + lifecycleFlows + onchainFlows)
+├── contracts/        Foundry payfi_v1 (7 Solidity sources, ~17K LOC test coverage)
+└── docs/             This file, LOCAL_E2E, DEPLOYMENT
 ```
 
----
+## Test coverage
 
-## Off-chain ↔ on-chain consistency
+**76 integration tests across two testnets, 38 per chain, all green.**
 
-The on-chain program is the **single source of truth** for fees and state. Off-chain code:
-
-1. **Indexer** (`workers/solanaIndexer.js`) — polls every 15s, mirrors Pool + Drawdown account state into Mongo, ingests `repaid: false → true` transitions as `RepaymentRecord` rows.
-2. **Daily-activity replay** (`/pool/:pool/daily-activity`) — fetches all program signatures, decodes events, replays day-by-day to produce a P&L breakdown. Uses the **same** per-drawdown formulas the on-chain `repay` uses (sum of active principals × bps, not peak-based) so totals match exactly.
-3. **Per-drawdown amortization** (`/pool/:pool/drawdown/:id/amortization`) — uses the literal on-chain `min(days_active, tenor + grace)` / `max(0, days_active − tenor − grace)` formulas.
-
-If the chain says one thing and the dashboard says another, the chain wins; the dashboard is rebuilt from chain events.
-
----
-
-## Time-warp testing
-
-Every Pool stores `seconds_per_day` (60..86_400). `300` means 5 real minutes = 1 chain day. The on-chain `day_index_for(now, seconds_per_day)` helper is used everywhere a timestamp gets bucketed into days. Off-chain endpoints read `pool.secondsPerDay` from the chain account so they bucket events the same way.
-
-The on-chain admin's facility detail page renders a live `FacilityClock` widget that updates every second, showing day-of-tenor, days remaining, and a countdown to the next on-chain day boundary. Useful for visually confirming warp-mode behavior during demos.
-
----
-
-## File-level pointers
-
-- Contract: [`solana/code/paymate-pool-v2/programs/paymate-pool-v2/src/lib.rs`](../solana/code/paymate-pool-v2/programs/paymate-pool-v2/src/lib.rs)
-- Anchor client: [`server/services/poolService.js`](../server/services/poolService.js)
-- Build-tx + read endpoints: [`server/routes/poolTx.js`](../server/routes/poolTx.js)
-- Facility lifecycle: [`server/routes/facility.js`](../server/routes/facility.js)
-- Access codes: [`server/routes/accessCode.js`](../server/routes/accessCode.js)
-- Indexer: [`server/workers/solanaIndexer.js`](../server/workers/solanaIndexer.js)
-- Wallet auth: [`server/routes/walletAuth.js`](../server/routes/walletAuth.js), [`server/services/walletAuth.js`](../server/services/walletAuth.js)
-- Frontend wallet helpers: [`client/src/services/solana.js`](../client/src/services/solana.js)
-- Live FacilityClock: in [`client/src/pages/onchain-admin/FacilityDetail.jsx`](../client/src/pages/onchain-admin/FacilityDetail.jsx)
+| Suite | Amoy | Arc |
+|---|---|---|
+| `e2eFlows.test.js` (auth, marketplace, deposit, faucet, gates, stubs) | 18/18 ✅ | 18/18 ✅ |
+| `lifecycleFlows.test.js` (PSP → KAM → CAD → CRO → onchain admin) | 13/13 ✅ | 13/13 ✅ |
+| `onchainFlows.test.js` (real approvePsp + createPool + faucet mint + BE state read) | 7/7 ✅ | 7/7 ✅ |
