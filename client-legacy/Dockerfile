@@ -4,8 +4,18 @@
 # Build args:
 #   VITE_API_URL, VITE_CHAIN_ID, VITE_CHAIN_NAME, VITE_RPC_URL, VITE_*_ADDRESS
 # All VITE_* need to be present at BUILD time (Vite bakes them in).
-FROM node:20-alpine AS build
+# Debian (glibc) builder, not alpine: the transitive `usb` module (pulled in
+# by the Solana Ledger wallet adapter) ships a prebuilt glibc binary, so on
+# Debian `npm ci` uses it and skips node-gyp entirely. On alpine/musl there's
+# no prebuild, forcing a native compile that fails without a full toolchain.
+# libudev-dev + build tools stay as a fallback in case a source build is hit.
+# It's Node-only hardware-wallet code that never lands in the browser bundle.
+FROM node:20-bookworm-slim AS build
 WORKDIR /app
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends python3 make g++ libudev-dev \
+  && rm -rf /var/lib/apt/lists/*
 
 COPY package.json package-lock.json ./
 RUN npm ci --no-fund --no-audit
