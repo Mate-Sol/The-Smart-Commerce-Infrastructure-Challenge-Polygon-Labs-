@@ -6,10 +6,15 @@ dist/
 build/
 out/
 
-# Environment — NEVER commit any .env file
+# Environment — NEVER commit any .env with secrets
 .env
 .env.*
 !.env.example
+!.env.production.example
+# FE build-time env: only public (onchain addresses, RPC, API URL). Vite bakes
+# these into the static bundle, so they cannot be secrets by definition.
+!client/.env.production
+!client-legacy/.env.production
 
 # Foundry
 contracts/out/
