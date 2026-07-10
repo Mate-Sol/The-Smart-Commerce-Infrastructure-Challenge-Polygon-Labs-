@@ -1,33 +1,28 @@
 import React from "react";
 import etherIcon from "@/assets/multiChain-ui/ether-icon.svg";
-import stellarIcon from "@/assets/multiChain-ui/stellar-icon.png";
-import starknetIcon from "@/assets/multiChain-ui/starknet-icon.png";
-import zigchainIcon from "@/assets/multiChain-ui/zigchain-icon.png";
 
+// Single-chain deploy — every consumer of chainOptions and getChainIcon
+// (MainHeader dropdowns, PoolList header pill, PoolDetails header, the
+// loans-page chain column, chainSlice default) should surface Polygon
+// and only Polygon. The legacy Stellar / Stark Net / Zig Chain entries
+// used to sit here for the multichain UI mock; they are gone in the
+// hackathon build.
 const chainMap = {
-  stellar:  { label: "Stellar",   src: stellarIcon },
-  starknet: { label: "Stark Net", src: starknetIcon },
-  zigchain: { label: "Zig Chain", src: zigchainIcon },
-  evm:      { label: "EVM",       src: etherIcon },
+  polygon: { label: "Polygon", src: etherIcon },
 };
 
 /**
- * getChainIcon — returns the icon element for a given blockchain type
- *
- * @param {string} bcType  - chain key: "stellar" | "starknet" | "zigchain" | "evm"
- * @param {number} size    - icon size in px (default: 16)
- * @returns {JSX.Element|null}
+ * getChainIcon — returns the icon element for a given blockchain type.
+ * Any legacy key ("stellar", "starknet", "zigchain", "evm") falls back
+ * to the Polygon icon so old mock rows still render an icon rather than
+ * breaking the layout.
  */
 export function getChainIcon(bcType, size = 16) {
-  const chain = chainMap[bcType?.toLowerCase()];
-  if (!chain) return null;
+  const chain = chainMap[bcType?.toLowerCase()] || chainMap.polygon;
   return <img src={chain.src} alt={chain.label} width={size} height={size} />;
 }
 
-/**
- * chainOptions — list of all chains for dropdowns etc.
- * Each entry: { key, label }
- */
+/** chainOptions — list of chains for dropdowns etc. Single entry. */
 export const chainOptions = Object.entries(chainMap).map(([key, val]) => ({
   key,
   label: val.label,

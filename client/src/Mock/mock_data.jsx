@@ -124,42 +124,50 @@ export const COLUMN_OPTIONS = [
   },
 ];
 
+// Loans preview rows for /wellcome + /loans. Hackathon build: only
+// polygon chain rendered (chain key drives the icon+label via chainIcons).
+// If we later wire the LoanPage to real API data, delete this array and
+// have LoanPage fetch its own rows.
 export const loansData = [
   {
-    investment: "100,000",
-    apy: "16%",
-    riskType: "High Risk Pool",
-    chain: "stellar",
-    tenure: "Expired",
-    tenureProgress: 100,
-    status: "Expired",
+    investment: "10,000",
+    apy: "12%",
+    riskType: "Medium Risk Pool",
+    chain: "polygon",
+    tenure: "30 days",
+    tenureProgress: 40,
+    status: "Active",
+    poolName: "Wise Pay Partners",
   },
   {
-    investment: "100,000",
-    apy: "16%",
+    investment: "5,000",
+    apy: "6%",
     riskType: "Low Risk Pool",
-    chain: "starknet",
-    tenure: "Expired",
-    tenureProgress: 100,
-    status: "Expired",
+    chain: "polygon",
+    tenure: "45 days",
+    tenureProgress: 10,
+    status: "Funding",
+    poolName: "EFI Remitt",
   },
   {
-    investment: "100,000",
-    apy: "16%",
+    investment: "25,000",
+    apy: "14%",
     riskType: "Medium Risk Pool",
-    chain: "zigchain",
-    tenure: "Expired",
-    tenureProgress: 100,
-    status: "Expired",
+    chain: "polygon",
+    tenure: "90 days",
+    tenureProgress: 65,
+    status: "Active",
+    poolName: "TransferGo Capital",
   },
   {
-    investment: "100,000",
-    apy: "16%",
+    investment: "10,000",
+    apy: "10%",
     riskType: "Medium Risk Pool",
-    chain: "evm",
-    tenure: "Expired",
-    tenureProgress: 100,
-    status: "Expired",
+    chain: "polygon",
+    tenure: "30 days",
+    tenureProgress: 85,
+    status: "Active",
+    poolName: "Skrill Cross-Border",
   },
 ];
 
@@ -230,7 +238,7 @@ export const WALLET_CARD_OPTIONS = [
 export const MOCK_POOLS = [
   {
     id: 1,
-   chain: "stellar",
+   chain: "polygon",
     status: "Open",
     poolName: "Pool Name....",
     date: "07 April 2025",
@@ -253,7 +261,7 @@ export const MOCK_POOLS = [
   },
   {
     id: 2,
-    chain: "stellar",
+    chain: "polygon",
     status: "Open",
     poolName: "Pool Name....",
     date: "07 April 2025",
@@ -276,7 +284,7 @@ export const MOCK_POOLS = [
   },
   {
     id: 3,
-    chain: "starknet",
+    chain: "polygon",
     status: "Active",
     poolName: "Pool Name....",
     date: "07 April 2025",
@@ -299,7 +307,7 @@ export const MOCK_POOLS = [
   },
   {
     id: 4,
-    chain: "zigchain",
+    chain: "polygon",
     status: "Settled",
     poolName: "Pool Name....",
     date: "07 April 2025",
