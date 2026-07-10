@@ -22,23 +22,11 @@ RUN npm ci --no-fund --no-audit
 
 COPY . .
 
-ARG VITE_API_URL
-ARG VITE_CHAIN_ID
-ARG VITE_CHAIN_NAME
-ARG VITE_CHAIN_NATIVE_SYMBOL
-ARG VITE_RPC_URL
-ARG VITE_STABLECOIN_ADDRESS
-ARG VITE_FACTORY_ADDRESS
-ARG VITE_WALLETCONNECT_PROJECT_ID
-
-ENV VITE_API_URL=${VITE_API_URL}
-ENV VITE_CHAIN_ID=${VITE_CHAIN_ID}
-ENV VITE_CHAIN_NAME=${VITE_CHAIN_NAME}
-ENV VITE_CHAIN_NATIVE_SYMBOL=${VITE_CHAIN_NATIVE_SYMBOL}
-ENV VITE_RPC_URL=${VITE_RPC_URL}
-ENV VITE_STABLECOIN_ADDRESS=${VITE_STABLECOIN_ADDRESS}
-ENV VITE_FACTORY_ADDRESS=${VITE_FACTORY_ADDRESS}
-ENV VITE_WALLETCONNECT_PROJECT_ID=${VITE_WALLETCONNECT_PROJECT_ID}
+# Vite bakes VITE_* env at build time. Values live in .env.production
+# (committed to the repo — all public: onchain addrs, RPC, API URL).
+# We deliberately do NOT expose ARG/ENV mappings for VITE_* here — an
+# empty ARG becomes an empty ENV, which then overrides .env.production
+# because Vite's process.env has higher priority than dotenv files.
 
 # Heavy dep tree (Solana adapters, CopilotKit, Sentry) can exhaust Node's
 # default heap during the Vite build on CI runners -> exit 137. Raise it.

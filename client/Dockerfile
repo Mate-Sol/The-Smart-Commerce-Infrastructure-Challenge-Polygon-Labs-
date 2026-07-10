@@ -16,31 +16,11 @@ RUN npm ci --no-fund --no-audit
 
 COPY . .
 
-# .env variables are needed at build for Vite. If provided via docker-compose
-# they'll be baked into the static bundle.
-ARG VITE_API_URL
-ARG VITE_CHAIN_ID
-ARG VITE_CHAIN_NAME
-ARG VITE_CHAIN_NATIVE_SYMBOL
-ARG VITE_CHAIN_NATIVE_DECIMALS
-ARG VITE_RPC_URL
-ARG VITE_CHAIN_EXPLORER_URL
-ARG VITE_STABLECOIN_ADDRESS
-ARG VITE_TREASURY_ADDRESS
-ARG VITE_FACTORY_ADDRESS
-ARG VITE_WALLETCONNECT_PROJECT_ID
-
-ENV VITE_API_URL=${VITE_API_URL}
-ENV VITE_CHAIN_ID=${VITE_CHAIN_ID}
-ENV VITE_CHAIN_NAME=${VITE_CHAIN_NAME}
-ENV VITE_CHAIN_NATIVE_SYMBOL=${VITE_CHAIN_NATIVE_SYMBOL}
-ENV VITE_CHAIN_NATIVE_DECIMALS=${VITE_CHAIN_NATIVE_DECIMALS}
-ENV VITE_RPC_URL=${VITE_RPC_URL}
-ENV VITE_CHAIN_EXPLORER_URL=${VITE_CHAIN_EXPLORER_URL}
-ENV VITE_STABLECOIN_ADDRESS=${VITE_STABLECOIN_ADDRESS}
-ENV VITE_TREASURY_ADDRESS=${VITE_TREASURY_ADDRESS}
-ENV VITE_FACTORY_ADDRESS=${VITE_FACTORY_ADDRESS}
-ENV VITE_WALLETCONNECT_PROJECT_ID=${VITE_WALLETCONNECT_PROJECT_ID}
+# Vite bakes VITE_* env at build time. Values live in .env.production
+# (committed to the repo — all public: onchain addrs, RPC, API URL).
+# We deliberately do NOT expose ARG/ENV mappings for VITE_* here — an
+# empty ARG becomes an empty ENV, which then overrides .env.production
+# because Vite's process.env has higher priority than dotenv files.
 
 # Heavy dep tree + large bundle can exhaust Node's default heap during the
 # Vite build on CI runners -> exit 137 / "heap out of memory". Raise the limit.
