@@ -86,6 +86,37 @@ async function mapPoolToDeal(poolAddress) {
   const activatedMs = state.poolStartTs > 0n    ? Number(state.poolStartTs)    * 1000 : null;
   const finalityMs  = state.poolFinalityTs > 0n ? Number(state.poolFinalityTs) * 1000 : null;
 
+  const tenureDays  = Number(state.tenure) || 0;
+  const nowMs       = Date.now();
+  const dayMs       = 86_400_000;
+
+  // remainingDays: days left before the facility matures.
+  //   ACTIVE  — days between now and the activated-day + tenor-days.
+  //   OPEN/lending pre-activation — tenor (full window ahead of borrower).
+  //   CLOSED/defaulted/unfulfilled — 0.
+  let remainingDays = 0;
+  if (status === 'lending' && activatedMs) {
+    const endMs = activatedMs + tenureDays * dayMs;
+    remainingDays = Math.max(0, Math.ceil((endMs - nowMs) / dayMs));
+  } else if (status === 'lending' && !activatedMs) {
+    remainingDays = tenureDays;
+  }
+
+  // dealExpiresIn: days left in the funding window (softCap deposit period).
+  //   Pool contract doesn't emit a distinct 'funding-close' timestamp, so we
+  //   fall back to a fixed 14-day funding window from fundingStartTs. If the
+  //   pool is already active, the funding window is closed → 0.
+  const FUNDING_WINDOW_DAYS = 14;
+  let dealExpiresIn = FUNDING_WINDOW_DAYS;
+  if (activatedMs) {
+    dealExpiresIn = 0;
+  } else if (createdMs) {
+    dealExpiresIn = Math.max(
+      0,
+      FUNDING_WINDOW_DAYS - Math.floor((nowMs - createdMs) / dayMs),
+    );
+  }
+
   return {
     _id:              poolAddress,
     pubkey:           poolAddress,
@@ -94,7 +125,7 @@ async function mapPoolToDeal(poolAddress) {
     status,
     poolRiskLevel:    risk,
     date:             createdMs ? new Date(createdMs).toDateString() : null,
-    chain:            'evm',
+    chain:            'polygon',
 
     poolMatureTime:   finalityMs ? Math.floor(finalityMs / 1000) : null,
     poolEndTime:      finalityMs ? Math.floor(finalityMs / 1000) : null,
@@ -106,8 +137,8 @@ async function mapPoolToDeal(poolAddress) {
 
     overview: {
       loanAmount,
-      loanTenure:    Number(state.tenure),
-      dealExpiresIn: 7,                                  // funding window in days (approx)
+      loanTenure:    tenureDays,
+      dealExpiresIn,
       liquidityPool: `${risk} Risk Pool`,
     },
 
@@ -117,18 +148,19 @@ async function mapPoolToDeal(poolAddress) {
 
     // Extras that some v2 components read even though we treat them as
     // "not in the original mock." Free of type constraints.
-    apyRate:      `${(aprBps / 100).toFixed(2)}%`,
-    apy:          (aprBps / 100).toFixed(2),
-    apyBps:       aprBps,
-    loanTenure:   `${Number(state.tenure)} days`,
-    remainingDays: 0,
-    totalLoan:    `$ ${loanAmount.toFixed(2)}`,
+    apyRate:       `${(aprBps / 100).toFixed(2)}%`,
+    aprAnnualBps:  aprBps,
+    apy:           (aprBps / 100).toFixed(2),
+    apyBps:        aprBps,
+    loanTenure:    `${tenureDays} days`,
+    remainingDays,
+    totalLoan:     `$ ${loanAmount.toFixed(2)}`,
     outstanding,
     availableToDd,
     yieldOwed,
     softCap,
-    stablecoin:   state.stablecoin,
-    pspWallet:    state.pspWallet,
+    stablecoin:    state.stablecoin,
+    pspWallet:     state.pspWallet,
   };
 }
 
