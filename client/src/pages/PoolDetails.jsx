@@ -170,7 +170,14 @@ const PoolDetails = () => {
               </div>
 
               {/* Business Overview */}
-              <BusinessOverview />
+              <BusinessOverview
+                kyrReportUrl={deal?.kyrReport?.url}
+                kyrReportFilename={deal?.kyrReport?.filename}
+                companyName={deal?.business?.company || deal?.poolName}
+                about={deal?.business?.description || undefined}
+                industry={deal?.business?.sector || undefined}
+                market={deal?.business?.jurisdiction || undefined}
+              />
 
               {/* Performance Graph */}
               <PerformanceGraph />
@@ -180,7 +187,14 @@ const PoolDetails = () => {
             </div>
           )}
 
-          {activeTab === "overview" && <BusinessOverview />}
+          {activeTab === "overview" && <BusinessOverview
+                kyrReportUrl={deal?.kyrReport?.url}
+                kyrReportFilename={deal?.kyrReport?.filename}
+                companyName={deal?.business?.company || deal?.poolName}
+                about={deal?.business?.description || undefined}
+                industry={deal?.business?.sector || undefined}
+                market={deal?.business?.jurisdiction || undefined}
+              />}
 
           {activeTab === "performance" && <PerformanceGraph />}
 

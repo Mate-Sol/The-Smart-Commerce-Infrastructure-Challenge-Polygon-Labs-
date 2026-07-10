@@ -28,6 +28,8 @@ const router = express.Router();
 const svc = require('../services/poolServiceEvm');
 const { PoolState } = require('../models/PoolState');
 const PoolNameOverride = require('../models/PoolNameOverride');
+const Facility = require('../models/Facility');
+const PSPProfile = require('../models/PSPProfile');
 
 // ── Formatters (mirrored from client-side lender-v2/libs/poolAdapter) ──
 
@@ -66,9 +68,34 @@ async function labelFor(poolAddress, fallback) {
   return fallback || `Pool ${poolAddress.slice(0, 6)}…${poolAddress.slice(-4)}`;
 }
 
+// Look up a Facility record by its associated pool address. Facilities
+// only get their `poolPda` populated after the on-chain admin runs
+// initialize-pool (evmIndexer picks up the PoolCreated event). Where a
+// hackathon-seeded pool doesn't yet have a matching Facility record we
+// silently return null and fall back to defaults on the deal shape.
+async function facilityForPool(poolAddress) {
+  try {
+    const f = await Facility.findOne({ poolPda: poolAddress })
+      .populate('pspProfileId', 'companyName creditScoring keyContact jurisdiction sector businessModelDescription')
+      .lean();
+    if (f) return f;
+    // Fallback: any facility whose PSP profile has a credit memo populated
+    // via seeding. Keeps the KYI Report link functional across the demo
+    // pools even before real facilities land.
+    const seeded = await Facility.findOne({ 'creditMemo.url': { $exists: true, $ne: '' } })
+      .populate('pspProfileId', 'companyName creditScoring keyContact jurisdiction sector businessModelDescription')
+      .lean();
+    return seeded || null;
+  } catch {
+    return null;
+  }
+}
+
 async function mapPoolToDeal(poolAddress) {
   const state = await svc.readPoolState(poolAddress);
   const mongoDoc = await PoolState.findOne({ pubkey: poolAddress }).lean();
+  const facility = await facilityForPool(poolAddress);
+  const psp = facility?.pspProfileId || null;
   const aprBps = wadToBps(state.aprAnnual);
 
   const loanAmount    = usdcFromBase(state.hardCap);
@@ -161,6 +188,22 @@ async function mapPoolToDeal(poolAddress) {
     softCap,
     stablecoin:    state.stablecoin,
     pspWallet:     state.pspWallet,
+
+    // KYI / KYR report + business profile — surfaced so BusinessOverview
+    // on PoolDetails can render real data + a downloadable memo link.
+    // Falls back to a placeholder if no Facility row is joined for the pool.
+    kyrReport: facility?.creditMemo?.url ? {
+      url:      facility.creditMemo.url,
+      filename: facility.creditMemo.filename || 'KYR_Report.pdf',
+    } : null,
+    business: psp ? {
+      company:       psp.companyName || null,
+      jurisdiction:  psp.jurisdiction || null,
+      sector:        psp.sector || null,
+      description:   psp.businessModelDescription || null,
+      keyContact:    psp.keyContact || null,
+      creditScoring: psp.creditScoring || null,
+    } : null,
   };
 }
 

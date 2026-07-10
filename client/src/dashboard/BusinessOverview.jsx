@@ -11,23 +11,26 @@ const Row = ({ label, value }) => (
 );
 
 const BusinessOverview = ({
-  established = "A 2012",
-  industry = "Security Systems",
-  focus = "Infrastructure & Surveillance",
-  specialization = "Large-scale project integration",
-  market = "SME construction sector",
-  about = "360Data is a commercial-grade solution running modern that connects manufacturers to facility for bringing from behind the currency sector.",
+  established = "2019",
+  industry = "Cross-border payments",
+  focus = "SME trade finance",
+  specialization = "USDC settlement operator",
+  market = "UAE ↔ Pakistan · UAE ↔ South Africa corridors",
+  about = "Licensed remittance & USDC settlement operator serving cross-border SMEs.",
   financials = {
-    revenue: "$ 4.1664",
-    netProfit: "$ 0.08",
-    equity: "$ 0.3664",
-    debtToEquity: "0.7921",
+    revenue: "$ 42.6M",
+    netProfit: "$ 3.8M",
+    equity: "$ 18.4M",
+    debtToEquity: "0.42",
   },
   purposeOfFacility = [
-    { left: "Procurement", right: "Security components" },
-    { left: "Executive Capacity", right: "Multi-site execution" },
+    { left: "Prefunding", right: "Cross-border settlement" },
+    { left: "Working Capital", right: "Corridor operations" },
     { left: "Financial Structuring", right: "Payment cycle bridging" },
   ],
+  kyrReportUrl = null,
+  kyrReportFilename = "KYR_Report.pdf",
+  companyName = "About company",
 }) => {
   return (
     <Card variant="simple" className="flex flex-col gap-6">
@@ -74,12 +77,28 @@ const BusinessOverview = ({
             <Row label="Equity (USDC YTD)" value={financials.equity} />
             <Row label="Debt-to-Equity" value={financials.debtToEquity} />
           </div>
-          {/* PDF Report */}
-          <div className="flex items-center gap-2 mt-3 p-2 rounded-xl bg-white/5 border border-white/10 w-fit">
-            <FileText size={20} className="text-rose-400" />
-            <span className="text-xs text-white/60">KYI Report</span>
-            <span className="text-xs text-white/30">View</span>
-          </div>
+          {/* PDF Report — real anchor when a URL is supplied; muted
+              placeholder otherwise so demos without a memo still render. */}
+          {kyrReportUrl ? (
+            <a
+              href={kyrReportUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              download={kyrReportFilename}
+              className="flex items-center gap-2 mt-3 p-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 hover:border-white/40 w-fit transition-colors cursor-pointer group"
+              title={`Download ${kyrReportFilename}`}
+            >
+              <FileText size={20} className="text-rose-400" />
+              <span className="text-xs text-white font-medium">KYI Report</span>
+              <span className="text-xs text-white/70 group-hover:text-white">View</span>
+            </a>
+          ) : (
+            <div className="flex items-center gap-2 mt-3 p-2 rounded-xl bg-white/5 border border-white/10 w-fit opacity-60">
+              <FileText size={20} className="text-rose-400" />
+              <span className="text-xs text-white/60">KYI Report</span>
+              <span className="text-xs text-white/30">Not yet uploaded</span>
+            </div>
+          )}
         </div>
 
         {/* Purpose of Facility */}
