@@ -35,8 +35,17 @@ const AccessCode = require('../models/AccessCode');
 const JWT_TTL = '7d';
 
 function issueLenderToken(lender) {
+  // `userId` is a duplicate of `lenderId` so the v2 client's AuthProtection
+  // (which decodes the JWT and reads `userId`) works. Keeping both fields
+  // means the shared authMiddleware — which reads `lenderId` — also still
+  // resolves the Lender record. Do not drop either.
   return jwt.sign(
-    { kind: 'lender', lenderId: lender._id.toString(), wallet: lender.wallet || '' },
+    {
+      kind: 'lender',
+      lenderId: lender._id.toString(),
+      userId:   lender._id.toString(),
+      wallet:   lender.wallet || '',
+    },
     process.env.JWT_SECRET,
     { expiresIn: JWT_TTL }
   );
@@ -83,6 +92,25 @@ router.post('/login-user', async (req, res) => {
   } catch (err) {
     console.error('[/users/login-user] error:', err);
     res.status(500).json({ message: 'Login failed' });
+  }
+});
+
+// ── GET /users/get-user/:id ────────────────────────────────────────────
+// The v2 client's AuthProtection calls this on mount to hydrate the Redux
+// store from the JWT-decoded userId. Returns the same shape as login.
+
+router.get('/get-user/:id', async (req, res) => {
+  try {
+    const id = String(req.params.id || '').trim();
+    if (!id.match(/^[a-f0-9]{24}$/i)) {
+      return res.status(400).json({ message: 'invalid id' });
+    }
+    const lender = await Lender.findById(id);
+    if (!lender) return res.status(404).json({ message: 'Lender not found' });
+    res.json({ data: shapeLender(lender) });
+  } catch (err) {
+    console.error('[/users/get-user] error:', err);
+    res.status(500).json({ message: 'Fetch failed' });
   }
 });
 
