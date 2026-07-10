@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useWallet } from '@solana/wallet-adapter-react';
+import { useAccount, useSendTransaction } from 'wagmi';
 import {
   ArrowLeft, RefreshCw, Loader2, ExternalLink, AlertTriangle, Clock, CheckCircle2, Zap, Calendar, DollarSign,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PspBorrowLayout from './Layout';
-import { api, buildSignRelay } from '../../../services/solana';
+import { api, buildAndSend } from '../../../services/evm';
 import { fmtLocalDate, fmtDayIndex } from '../../../utils/dateFmt';
 
 const fmt = (base) => {
@@ -19,12 +19,13 @@ const fmt = (base) => {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 4 }).format(usd);
 };
 const fmtBps = (bps) => `${(Number(bps) / 100).toFixed(2)}%/d`;
-const explorer = (kind, val) => `https://explorer.solana.com/${kind}/${val}?cluster=devnet`;
+const explorer = (kind, val) => `https://amoy.polygonscan.com/${kind === 'tx' ? 'tx' : 'address'}/${val}`;
 
 const DrawdownDetail = () => {
   const { pool: poolPubkey, drawdownId } = useParams();
   const navigate = useNavigate();
-  const wallet = useWallet();
+  const { address, isConnected } = useAccount();
+  const { sendTransactionAsync } = useSendTransaction();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -41,11 +42,11 @@ const DrawdownDetail = () => {
   useEffect(() => { refresh(); }, [poolPubkey, drawdownId]);
 
   const handleRepay = async () => {
-    if (!wallet.connected) { toast.error('Connect wallet first'); return; }
+    if (!isConnected) { toast.error('Connect wallet first'); return; }
     setBusy(true);
     try {
-      const r = await buildSignRelay(wallet, '/pool/psp/build-tx/repay', { drawdownId: Number(drawdownId), pool: poolPubkey });
-      toast.success(`Repaid: ${r.signature.slice(0, 8)}…`);
+      const r = await buildAndSend(address, sendTransactionAsync, '/pool/psp/build-tx/repay', { drawdownId: Number(drawdownId), pool: poolPubkey });
+      toast.success(`Repaid: ${r.hash.slice(0, 10)}…`);
       navigate(`/psp/borrow/facilities/${poolPubkey}`);
     } catch (e) {
       toast.error(e.response?.data?.message || e.message);

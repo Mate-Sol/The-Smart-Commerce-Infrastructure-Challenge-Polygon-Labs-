@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useWallet } from '@solana/wallet-adapter-react';
+import { useAccount, useSendTransaction } from 'wagmi';
 import {
   ArrowLeft, RefreshCw, Loader2, ExternalLink, Zap,
   ShieldOff, Pause, AlertTriangle, CheckCircle2, Clock, ArrowDownLeft, ArrowUpRight, AlertCircle,
@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import OnChainAdminLayout from './Layout';
-import { api, buildSignRelay } from '../../services/solana';
+import { api, buildAndSend } from '../../services/evm';
 import { fmtDayIndex, fmtCountdown, isWarpMode } from '../../utils/dateFmt';
 import { isSettledFromPool } from '../../utils/poolStatus';
 import ValidationPipeline from '../../components/defa/ValidationPipeline';
@@ -22,12 +22,13 @@ const fmtBps = (bps) => `${(Number(bps) / 100).toFixed(2)}%/d`;
 const fmtBpsRaw = (bps) => `${Number(bps)}bps/d`;
 const todayDayIndex = (secondsPerDay = 86400) =>
   Math.floor(Date.now() / 1000 / (Number(secondsPerDay) || 86400));
-const explorer = (kind, val) => `https://explorer.solana.com/${kind}/${val}?cluster=devnet`;
+const explorer = (kind, val) => `https://amoy.polygonscan.com/${kind === 'tx' ? 'tx' : 'address'}/${val}`;
 
 const FacilityDetail = () => {
   const { pool: poolPubkey } = useParams();
   const navigate = useNavigate();
-  const wallet = useWallet();
+  const { address, isConnected } = useAccount();
+  const { sendTransactionAsync } = useSendTransaction();
   const [state, setState] = useState(null);
   const [drawdowns, setDrawdowns] = useState([]);
   const [activity, setActivity] = useState([]);
@@ -87,9 +88,9 @@ const FacilityDetail = () => {
   // in here), the chain would reject the tx anyway — but we hide the buttons
   // to make the security boundary explicit.
   const walletMatchesAdmin = useMemo(() => {
-    if (!state || !wallet.publicKey) return false;
-    return wallet.publicKey.toBase58() === state.admin;
-  }, [state, wallet.publicKey]);
+    if (!state || !address) return false;
+    return address.toLowerCase() === String(state.admin || '').toLowerCase();
+  }, [state, address]);
 
   // Lifetime yield aggregates. Earned + Redeemed are sourced from the
   // server-side /fee-aggregates endpoint, which paginates the entire
@@ -140,11 +141,11 @@ const FacilityDetail = () => {
 
   // Run a build-tx flow + relay submit for an admin-signed instruction.
   const runAction = async (kind, endpoint) => {
-    if (!wallet.connected) { toast.error('Connect wallet first'); return; }
+    if (!isConnected) { toast.error('Connect wallet first'); return; }
     setSigning(kind);
     try {
-      const res = await buildSignRelay(wallet, endpoint, { pool: poolPubkey });
-      toast.success(`${kind} confirmed: ${res.signature.slice(0, 8)}…`);
+      const res = await buildAndSend(address, sendTransactionAsync, endpoint, { pool: poolPubkey });
+      toast.success(`${kind} confirmed: ${res.hash.slice(0, 10)}…`);
       refresh();
     } catch (e) {
       toast.error(e.response?.data?.message || e.message);
@@ -286,7 +287,7 @@ const FacilityDetail = () => {
             <Zap className="w-4 h-4 text-white/80" />
             <h3 className="font-semibold">Admin Actions</h3>
           </div>
-          {!wallet.connected ? (
+          {!isConnected ? (
             <div className="text-sm text-white/60">Connect the on-chain admin wallet to take actions.</div>
           ) : !walletMatchesAdmin ? (
             <div className="text-sm flex items-start gap-2 text-amber-200">

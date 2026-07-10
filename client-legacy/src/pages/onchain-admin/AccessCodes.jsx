@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Loader2, RefreshCw, Plus, Copy, Check, Trash2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import OnChainAdminLayout from './Layout';
-import { api } from '../../services/solana';
+import { api } from '../../services/evm';
 
 // On-chain admin tool: mint + manage one-time lender access codes.
 //   Generate N codes with an optional label → copy + share

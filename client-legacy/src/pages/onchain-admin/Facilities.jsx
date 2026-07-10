@@ -4,7 +4,7 @@ import { Loader2, RefreshCw, Layers } from 'lucide-react';
 import toast from 'react-hot-toast';
 import OnChainAdminLayout from './Layout';
 import FacilityCard from '../../components/defa/FacilityCard';
-import { api } from '../../services/solana';
+import { api } from '../../services/evm';
 
 const fmtUsdc = (base) => {
   if (base === undefined || base === null) return '$0';

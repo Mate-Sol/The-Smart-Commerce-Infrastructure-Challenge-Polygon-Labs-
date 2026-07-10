@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { useWallet } from '@solana/wallet-adapter-react';
-import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
+import { useDisconnect } from 'wagmi';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { LogOut } from 'lucide-react';
 import '../../../styles/defa.css';
 
@@ -11,11 +11,12 @@ import '../../../styles/defa.css';
  * /psp/dashboard, /psp/order-book, /psp/onboarding etc. stay in the
  * legacy light theme; this section is just for the borrowing lifecycle.
  *
- * Auth: PSP JWT in sessionStorage (existing AuthContext).
+ * Auth: PSP JWT in sessionStorage (existing AuthContext). Wallet is EVM
+ * (MetaMask / RainbowKit) — signs repay / drawdown-related transactions.
  */
 const PspBorrowLayout = ({ children }) => {
   const navigate = useNavigate();
-  const wallet = useWallet();
+  const { disconnect } = useDisconnect();
   const [me, setMe] = useState(null);
 
   useEffect(() => {
@@ -30,7 +31,7 @@ const PspBorrowLayout = ({ children }) => {
     sessionStorage.removeItem('user');
     localStorage.removeItem('token');
     localStorage.removeItem('lender');
-    wallet.disconnect();
+    try { disconnect(); } catch {}
     navigate('/');
   };
 
@@ -70,7 +71,7 @@ const PspBorrowLayout = ({ children }) => {
         </nav>
 
         <div className="flex items-center gap-3">
-          <WalletMultiButton />
+          <ConnectButton />
           <button onClick={handleLogout} className="defa-btn-ghost" title="Sign out">
             <LogOut className="w-4 h-4" />
           </button>

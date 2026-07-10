@@ -4,7 +4,7 @@ import { ArrowLeft, RefreshCw, Loader2, ArrowUpRight, ArrowDownLeft } from 'luci
 import toast from 'react-hot-toast';
 import PspBorrowLayout from './Layout';
 import Pagination from '../../../components/defa/Pagination';
-import { api } from '../../../services/solana';
+import { api } from '../../../services/evm';
 import { fmtLocalDate, localTzName } from '../../../utils/dateFmt';
 
 const fmt = (base) => {

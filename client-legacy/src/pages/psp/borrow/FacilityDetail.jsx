@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useWallet } from '@solana/wallet-adapter-react';
+import { useAccount, useSendTransaction } from 'wagmi';
 import {
   ArrowLeft, RefreshCw, Loader2, ExternalLink, ChevronRight, BarChart3,
   ArrowUpRight, AlertTriangle, Clock, CheckCircle2, Zap, ShieldOff, Pause,
@@ -10,7 +10,7 @@ import toast from 'react-hot-toast';
 import PspBorrowLayout from './Layout';
 import NextActionsHero from '../../../components/defa/NextActionsHero';
 import ValidationPipeline from '../../../components/defa/ValidationPipeline';
-import { api, buildSignRelay } from '../../../services/solana';
+import { api, buildAndSend } from '../../../services/evm';
 import { fmtDayIndex } from '../../../utils/dateFmt';
 import { isSettledFromPool } from '../../../utils/poolStatus';
 
@@ -20,13 +20,17 @@ const fmt = (base) => {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(usd);
 };
 const fmtBps = (bps) => `${Number(bps)}bps/d`;
-const explorer = (kind, val) => `https://explorer.solana.com/${kind}/${val}?cluster=devnet`;
+// Polygon Amoy explorer. If EVM_EXPLORER_URL becomes configurable per env
+// we can lift this to VITE_CHAIN_EXPLORER_URL, but for the hackathon it's
+// baked to Amoy.
+const explorer = (kind, val) => `https://amoy.polygonscan.com/${kind === 'tx' ? 'tx' : kind === 'address' ? 'address' : 'tx'}/${val}`;
 const todayDayIndex = () => Math.floor(Date.now() / 1000 / 86400);
 
 const FacilityDetail = () => {
   const { pool: poolPubkey } = useParams();
   const navigate = useNavigate();
-  const wallet = useWallet();
+  const { address, isConnected } = useAccount();
+  const { sendTransactionAsync } = useSendTransaction();
   const [state, setState] = useState(null);
   const [drawdowns, setDrawdowns] = useState([]);
   const [pending, setPending] = useState(null);
@@ -72,11 +76,11 @@ const FacilityDetail = () => {
   }, [state, drawdowns]);
 
   const runAction = async (key, endpoint, body) => {
-    if (!wallet.connected) { toast.error('Connect wallet first'); return; }
+    if (!isConnected) { toast.error('Connect wallet first'); return; }
     setBusy(key);
     try {
-      const r = await buildSignRelay(wallet, endpoint, body);
-      toast.success(`Done: ${r.signature.slice(0, 8)}…`);
+      const r = await buildAndSend(address, sendTransactionAsync, endpoint, body);
+      toast.success(`Done: ${r.hash.slice(0, 10)}…`);
       refresh();
     } catch (e) {
       toast.error(e.response?.data?.message || e.message);

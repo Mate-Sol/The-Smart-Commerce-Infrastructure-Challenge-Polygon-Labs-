@@ -7,7 +7,7 @@ import NextActionsHero from '../../../components/defa/NextActionsHero';
 import FacilityCard from '../../../components/defa/FacilityCard';
 import QuickRequestModal from '../../../components/defa/QuickRequestModal';
 import RequestFacilityModal from '../../../components/defa/RequestFacilityModal';
-import { api } from '../../../services/solana';
+import { api } from '../../../services/evm';
 
 // PSP-side facility list. Two sections:
 //   1. On-chain facilities (initialized pools) — full FacilityCard with stats
