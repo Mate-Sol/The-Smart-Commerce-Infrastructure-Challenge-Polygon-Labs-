@@ -81,7 +81,7 @@ const Hero = () => (
     <div className="max-w-2xl lg:max-w-[640px]">
       <span className="defa-pill" style={{ cursor: 'default' }}>
         <span className="w-2 h-2 rounded-full bg-emerald-300" />
-        Live on Polygon Amoy
+        Now live on-chain
       </span>
       <h1 className="defa-headline mt-6">
         On-Chain<br />Liquidity as<br />a Service <span className="text-white/85">(LaaS)</span><br />Infrastructure
@@ -188,7 +188,7 @@ const Footer = () => (
   <footer className="max-w-7xl mx-auto px-6 lg:px-10 pb-10 text-xs text-white/55">
     <div className="defa-divider mb-6" />
     <div className="flex flex-wrap items-center justify-between gap-3">
-      <div>© {new Date().getFullYear()} DeFa Protocol — Liquidity as a Service. Built on Polygon.</div>
+      <div>© {new Date().getFullYear()} DeFa Protocol — Liquidity as a Service.</div>
       <div className="flex items-center gap-4">
         <a href="#" className="hover:text-white">Privacy</a>
         <a href="#" className="hover:text-white">Terms</a>
