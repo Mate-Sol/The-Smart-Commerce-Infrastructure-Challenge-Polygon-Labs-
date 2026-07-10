@@ -98,9 +98,11 @@ const Login = () => {
       {/* Right Panel - Login Form */}
       <div className="flex-1 flex items-center justify-center p-8 bg-gray-50">
         <div className="w-full max-w-md">
-          {/* Mobile Logo */}
+          {/* Mobile Logo — SVG asset is white (designed for the dark left
+              panel above the lg breakpoint). On the mobile viewport it
+              sits on bg-gray-50, so we invert() it to render dark. */}
           <div className="lg:hidden flex flex-col items-center justify-center gap-4 mb-8">
-            <img src="/main-defa-logo.svg" className="h-24 w-auto" alt="DeFa" />
+            <img src="/main-defa-logo.svg" className="h-24 w-auto invert" alt="DeFa" />
             <div className="flex items-center gap-2 px-4 py-1.5 bg-brand-purple/10 rounded-full border border-brand-purple/20 text-brand-purple text-xs font-bold uppercase tracking-wider">
               <Briefcase className="w-3.5 h-3.5" />
               PayMate
