@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { useWallet } from '@solana/wallet-adapter-react';
-import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
+import { useDisconnect } from 'wagmi';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { LogOut } from 'lucide-react';
 import '../../styles/defa.css';
 
@@ -13,7 +13,7 @@ import '../../styles/defa.css';
  */
 const OnChainAdminLayout = ({ children, requireAuth = true }) => {
   const navigate = useNavigate();
-  const wallet = useWallet();
+  const { disconnect } = useDisconnect();
   const [me, setMe] = useState(null);
 
   useEffect(() => {
@@ -43,7 +43,7 @@ const OnChainAdminLayout = ({ children, requireAuth = true }) => {
     sessionStorage.removeItem('user');
     localStorage.removeItem('token');
     localStorage.removeItem('lender');
-    wallet.disconnect();
+    try { disconnect(); } catch {}
     navigate('/');
   };
 
@@ -64,7 +64,7 @@ const OnChainAdminLayout = ({ children, requireAuth = true }) => {
             draggable={false}
           />
           <div className="text-[10px] uppercase tracking-widest text-white/60 leading-none">
-            On-Chain Admin · Devnet
+            On-Chain Admin · Testnet
           </div>
         </div>
 
@@ -85,7 +85,7 @@ const OnChainAdminLayout = ({ children, requireAuth = true }) => {
         )}
 
         <div className="flex items-center gap-3">
-          <WalletMultiButton />
+          <ConnectButton />
           {requireAuth && me && (
             <button onClick={handleLogout} className="defa-btn-ghost" title="Sign out">
               <LogOut className="w-4 h-4" />

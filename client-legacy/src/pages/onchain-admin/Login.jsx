@@ -1,14 +1,20 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useWallet } from '@solana/wallet-adapter-react';
-import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
+import { useAccount, useSignMessage } from 'wagmi';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { Loader2, ShieldCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
 import OnChainAdminLayout from './Layout';
-import { onchainAdminLogin } from '../../services/solana';
+import { onchainAdminLogin } from '../../services/evm';
 
+/**
+ * On-chain admin sign-in via SIWE. The connected EVM wallet must be on the
+ * server's ONCHAIN_ADMIN_WALLETS allowlist (env var); otherwise the login
+ * request 403s and the user is bounced back with a toast.
+ */
 const OnChainAdminLogin = () => {
-  const wallet = useWallet();
+  const { address, isConnected } = useAccount();
+  const { signMessageAsync } = useSignMessage();
   const navigate = useNavigate();
   const [loggingIn, setLoggingIn] = useState(false);
   const [tried, setTried] = useState(false);
@@ -20,21 +26,22 @@ const OnChainAdminLogin = () => {
   }, []);
 
   useEffect(() => {
-    if (!wallet.connected || tried) return;
+    if (!isConnected || !address || tried) return;
     setTried(true);
     setLoggingIn(true);
     (async () => {
       try {
-        await onchainAdminLogin(wallet);
+        await onchainAdminLogin(address, signMessageAsync);
         toast.success('Signed in');
         navigate('/onchain-admin/facilities');
       } catch (e) {
         toast.error(e.response?.data?.message || e.message);
+        setTried(false); // let user retry with a different wallet
       } finally {
         setLoggingIn(false);
       }
     })();
-  }, [wallet.connected, wallet.publicKey?.toBase58()]);
+  }, [isConnected, address]);
 
   return (
     <OnChainAdminLayout requireAuth={false}>
@@ -45,12 +52,13 @@ const OnChainAdminLogin = () => {
           </div>
           <h1 className="text-2xl font-bold mb-2">On-Chain Admin</h1>
           <p className="text-white/70 text-sm mb-6">
-            Sign in with your authorized Solana wallet to deploy and manage facilities.
-            Your wallet must be on the on-chain admin allowlist.
+            Sign in with your authorised EVM wallet (MetaMask / RainbowKit) to
+            deploy and manage facilities. Your wallet must be on the on-chain
+            admin allowlist.
           </p>
 
           <div className="flex justify-center mb-3">
-            <WalletMultiButton />
+            <ConnectButton />
           </div>
 
           {loggingIn && (
@@ -60,9 +68,9 @@ const OnChainAdminLogin = () => {
             </div>
           )}
 
-          {wallet.connected && !loggingIn && (
+          {isConnected && !loggingIn && (
             <p className="text-white/60 text-xs mt-4 font-mono break-all">
-              {wallet.publicKey?.toBase58()}
+              {address}
             </p>
           )}
         </div>
