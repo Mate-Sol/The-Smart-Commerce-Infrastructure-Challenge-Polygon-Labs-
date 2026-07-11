@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { CheckCircle2, XCircle, Loader2, Clock, Circle, AlertCircle } from 'lucide-react';
-import { api } from '../../services/solana';
+import { api } from '../../services/evm';
 
 /**
  * Validation pipeline stepper. Shows the off-chain agent's progress

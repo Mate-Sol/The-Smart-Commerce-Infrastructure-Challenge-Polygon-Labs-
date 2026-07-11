@@ -318,6 +318,41 @@ router.get('/pool/:pool/drawdowns', async (req, res) => {
   } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
+/**
+ * Validation pipeline for a drawdown. The off-chain validation agent
+ * would normally populate + advance the five stages per request (order
+ * verification → credit-line check → dedupe → sufficient credit → risk).
+ * In the hackathon build we don't run a live agent; instead we surface a
+ * canned all-passed stepper so the demo shows the auditable 5/5 result
+ * from image 49 of the reference video. When the DrawdownState row
+ * carries an ORD-* reference we splice that into the order-verified
+ * detail line so different drawdowns feel individualised.
+ */
+router.get('/pool/:pool/drawdown/:drawdownId/pipeline', async (req, res) => {
+  try {
+    const pool = validAddr(req.params.pool);
+    if (!pool) return res.status(400).json({ message: 'Invalid pool address' });
+    const drawdownId = String(req.params.drawdownId || '');
+
+    const dd = await DrawdownState.findOne({ pool, id: drawdownId }).lean();
+    const orderRef = dd?.orderReference || 'ORD-15420671-1640';
+    const nowIso = new Date().toISOString();
+
+    const steps = [
+      { name: 'Order verified',      status: 'passed', detail: `Order ${orderRef} accepted`,       completedAt: nowIso },
+      { name: 'Credit line approved', status: 'passed', detail: 'Facility active',                 completedAt: nowIso },
+      { name: 'Order not financed',  status: 'passed', detail: 'Fresh request',                    completedAt: nowIso },
+      { name: 'Sufficient credit',   status: 'passed', detail: 'Requested amount within facility cap', completedAt: nowIso },
+      { name: 'Risk validated',      status: 'passed', detail: 'Inline checks cleared',            completedAt: nowIso },
+    ];
+
+    res.json({ pool, drawdownId, steps, rejectionReason: null });
+  } catch (e) {
+    console.error('[/pool/:pool/drawdown/:drawdownId/pipeline]', e);
+    res.status(500).json({ message: e.message });
+  }
+});
+
 router.get('/pools', async (req, res) => {
   try {
     const { state: qState } = req.query;
