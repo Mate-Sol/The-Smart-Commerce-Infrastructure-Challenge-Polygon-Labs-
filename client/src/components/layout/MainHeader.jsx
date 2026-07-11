@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { setSelectedChain } from "@/store/chainSlice";
-import { useWalletConnect } from "@/hooks/useWalletConnect";
+import { useAccount, useDisconnect } from "wagmi";
+import { useConnectModal } from "@rainbow-me/rainbowkit";
 import defaLogo from "../../assets/multiChain-ui/main-defa-logo.svg";
 import Button from "../ui/Button";
 import { DropdownItem } from "../navigation/Dropdown";
@@ -28,8 +29,13 @@ const MainHeader = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const dispatch = useDispatch();
   const selectedChain = useSelector((state) => state.chain.selected);
-  const { connect, disconnect, walletAddress, isConnected, isConnecting } =
-    useWalletConnect();
+  // Wagmi + RainbowKit shim replacing the deprecated multi-chain
+  // useWalletConnect hook. Same 5-variable surface so nothing else in
+  // this component needs to change.
+  const { address: walletAddress, isConnected, isConnecting } = useAccount();
+  const { disconnect } = useDisconnect();
+  const { openConnectModal } = useConnectModal();
+  const connect = () => openConnectModal?.();
   const navigate = useNavigate();
   const location = useLocation();
   const profileRef = useRef(null);

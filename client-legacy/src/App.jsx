@@ -44,13 +44,6 @@ const AIChat = lazy(() => import('./components/ai-chat/AIChat'));
 const RAGProjects = lazy(() => import('./pages/rag/RAGProjects'));
 const RAGProjectDetail = lazy(() => import('./pages/rag/RAGProjectDetail'));
 const RAGChat = lazy(() => import('./pages/rag/RAGChat'));
-const LenderLogin = lazy(() => import('./pages/lender/Login'));
-const LenderPools = lazy(() => import('./pages/lender/Pools'));
-const LenderDashboard = lazy(() => import('./pages/lender/Dashboard'));
-const LenderFacilities = lazy(() => import('./pages/lender/Facilities'));
-const LenderMyInvestments = lazy(() => import('./pages/lender/MyInvestments'));
-const LenderFacilityDetail = lazy(() => import('./pages/lender/FacilityDetail'));
-const LenderDailyActivity = lazy(() => import('./pages/lender/DailyActivity'));
 const PendingPoolInits = lazy(() => import('./pages/admin/PendingPoolInits'));
 const FacilityQueue = lazy(() => import('./pages/admin/FacilityQueue'));
 const OnChainAdminLogin = lazy(() => import('./pages/onchain-admin/Login'));
@@ -83,18 +76,6 @@ function App() {
             <Route path="/reset-password/:token" element={<ResetPassword />} />
             <Route path="/psp/apply-limit" element={<ApplyFinancingLimit />} />
             <Route path="/psp/agrement-onboarding" element={<AgreementOnboarding />} />
-
-            {/* Lender Routes — wallet-only auth, no email/password.
-                DeFa-themed shell with Dashboard / Facilities / My Investments. */}
-            <Route path="/lender" element={<Navigate to="/lender/dashboard" replace />} />
-            <Route path="/lender/login" element={<LenderLogin />} />
-            <Route path="/lender/dashboard" element={<LenderDashboard />} />
-            <Route path="/lender/facilities" element={<LenderFacilities />} />
-            <Route path="/lender/my-investments" element={<LenderMyInvestments />} />
-            <Route path="/lender/facilities/:pool" element={<LenderFacilityDetail />} />
-            <Route path="/lender/facilities/:pool/daily-activity" element={<LenderDailyActivity />} />
-            {/* Legacy route — kept while in-flight links migrate */}
-            <Route path="/lender/pools" element={<LenderPools />} />
 
             {/* Admin pool-init queue — surfaces AWAITING_POOL_INIT facilities */}
             <Route

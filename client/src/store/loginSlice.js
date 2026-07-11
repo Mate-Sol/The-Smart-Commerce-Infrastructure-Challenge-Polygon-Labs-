@@ -1,5 +1,9 @@
-import { getUsdcBalance } from "@/stellar/stellarMethod";
 import { createSlice } from "@reduxjs/toolkit";
+
+// Single-chain Redux slice for the authenticated lender. Legacy Solana /
+// Stellar branches (getUsdcBalance shim, getUserTokensBlances thunk) were
+// removed alongside the deprecated /stellar helper module — on-chain USDC
+// balance is now read via wagmi hooks in the pages that need it.
 
 const initialState = {
   user: null,
@@ -15,7 +19,6 @@ const userSlice = createSlice({
       state.success = true;
     },
     updateTokenBalance: (state, action) => {
-      console.log("🚀 ~ action.payload:", action.payload);
       state.user = {
         ...state.user,
         usdc: action.payload.usdc,
@@ -23,37 +26,12 @@ const userSlice = createSlice({
       };
       state.success = true;
     },
-
     logOut: (state) => {
       state.user = null;
       state.success = false;
     },
   },
 });
-
-export function getUserTokensBlances(address, chain, signTransaction) {
-  console.log("🚀 ~ getUserTokensBlances ~ address, chain:", address, chain);
-  return async (dispatch) => {
-    try {
-      debugger;
-      const usdc = await getUsdcBalance(address, signTransaction);
-      // const dlp = await getDefaLpTokensBalance(
-      //   chain?.chainId,
-      //   address,
-      //   "Low Risk Pool"
-      // );
-      console.log("🚀 ~ return ~ usdc:", usdc);
-      dispatch(
-        updateTokenBalance({
-          usdc: usdc < 0.000001 ? 0 : usdc,
-          // dlp: dlp < 0.000001 ? 0 : dlp,
-        }),
-      );
-    } catch (error) {
-      console.log("🚀 ~ getUserTokensBlances ~ error:", error);
-    }
-  };
-}
 
 export const { loginSuccess, logOut, updateTokenBalance } = userSlice.actions;
 export default userSlice.reducer;
