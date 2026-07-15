@@ -60,10 +60,15 @@ function wadToBps(wad) {
 
 async function labelFor(poolAddress, fallback) {
   try {
-    // Schema field is `poolPda` (legacy name from Solana era; we store
-    // the 0x… EVM address there).
+    // 1. explicit PoolNameOverride wins — used when admins re-brand a pool
+    //    after deploy without touching the facility record.
     const override = await PoolNameOverride.findOne({ poolPda: poolAddress }).lean();
     if (override?.displayName) return override.displayName;
+    // 2. next best: the facility's own `label` (set by the PSP at
+    //    /facility/request time). Real onchain pools created via the
+    //    admin flow always have a Facility row keyed by their poolPda.
+    const fac = await Facility.findOne({ poolPda: poolAddress }, { label: 1 }).lean();
+    if (fac?.label) return fac.label;
   } catch { /* schema optional */ }
   return fallback || `Pool ${poolAddress.slice(0, 6)}…${poolAddress.slice(-4)}`;
 }
